@@ -1,0 +1,43 @@
+# ── Secrets — NEVER commit ──────────────────────────────
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+wallet.json
+
+# ── Python ──────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# ── Node / frontend ─────────────────────────────────────
+node_modules/
+dist/
+.vite/
+*.local
+
+# ── App data / runtime state ────────────────────────────
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.db
+snapshot.json
+paper_state.json
+data/
+
+# ── Deploy tooling / secrets ────────────────────────────
+# (keep comments on their own line — inline # is NOT a comment in .gitignore)
+bin/
+deploy/cloudflared-config.yml
+*.pem
+.cloudflared/
+
+# ── Editor / OS ─────────────────────────────────────────
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

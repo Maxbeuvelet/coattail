@@ -1,0 +1,42 @@
+.dot {
+  display: inline-block;
+  border-radius: var(--r-pill);
+  flex: none;
+  position: relative;
+}
+.live {
+  background: var(--pos);
+}
+.paper {
+  background: var(--info);
+}
+.warn {
+  background: var(--warn);
+}
+.neg {
+  background: var(--neg);
+}
+.idle {
+  background: var(--text-4);
+}
+
+/* One calm ring that fades outward. No neon, no glow. */
+.pulse::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: inherit;
+  animation: ripple 2.4s var(--ease) infinite;
+}
+@keyframes ripple {
+  0% {
+    transform: scale(1);
+    opacity: 0.5;
+  }
+  70%,
+  100% {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+}

@@ -1,0 +1,242 @@
+.container {
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface-1);
+  overflow: hidden;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-13);
+}
+
+/* ── Header ── */
+.table thead th {
+  /* The scroll parent is the content pane (already below the top bar), so the
+     header pins at 0 — offsetting by the top-bar height would hide row #1. */
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--surface-1);
+  text-align: left;
+  font-size: var(--fs-11);
+  font-weight: var(--fw-medium);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  padding: var(--sp-3) var(--sp-3);
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.sorted {
+  color: var(--text-1);
+}
+
+/* ── Columns ── */
+.colRank {
+  width: 44px;
+  padding-left: var(--sp-4) !important;
+}
+.colTrader {
+  min-width: 190px;
+}
+.colNum {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.colFollow {
+  width: 108px;
+  text-align: right;
+}
+.colChev {
+  width: 34px;
+  padding-right: var(--sp-3) !important;
+}
+
+/* ── Row groups ── */
+.group {
+  border-bottom: 1px solid var(--border);
+}
+.group:last-child {
+  border-bottom: none;
+}
+.groupOpen {
+  background: var(--surface-2);
+}
+
+.row {
+  cursor: pointer;
+  transition: background var(--dur) var(--ease);
+}
+.row:hover {
+  background: var(--surface-2);
+}
+.row td {
+  padding: var(--sp-3) var(--sp-3);
+  vertical-align: middle;
+}
+.row:focus-visible {
+  outline: none;
+  box-shadow: inset 2px 0 0 var(--info);
+}
+
+/* ── Rank ── */
+.rank {
+  display: inline-grid;
+  place-items: center;
+  min-width: 22px;
+  height: 20px;
+  padding: 0 var(--sp-1);
+  border-radius: var(--r-sm);
+  background: var(--surface-3);
+  color: var(--text-2);
+  font-size: var(--fs-12);
+  font-weight: var(--fw-semibold);
+  font-variant-numeric: tabular-nums;
+}
+.rankTop {
+  background: color-mix(in srgb, var(--warn) 16%, var(--surface-3));
+  color: var(--warn);
+}
+
+/* ── Trader identity ── */
+.trader {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  line-height: 1.3;
+}
+.name {
+  font-weight: var(--fw-semibold);
+  color: var(--text-1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+}
+.addr {
+  font-size: var(--fs-11);
+  color: var(--text-4);
+}
+
+/* ── Profit cell + in-cell bar ── */
+.colNum {
+  position: relative;
+}
+.bar {
+  position: absolute;
+  right: var(--sp-3);
+  bottom: 6px;
+  height: 3px;
+  background: var(--data);
+  opacity: 0.55;
+  border-radius: var(--r-pill);
+  max-width: calc(100% - var(--sp-6));
+}
+.pnl {
+  font-weight: var(--fw-semibold);
+  position: relative;
+}
+.muted {
+  color: var(--text-3);
+}
+.flat {
+  color: var(--text-4);
+  font-style: italic;
+  font-size: var(--fs-12);
+}
+
+/* ── Follow button ── */
+.follow {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  height: 26px;
+  padding: 0 var(--sp-2) 0 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: var(--fs-12);
+  font-weight: var(--fw-medium);
+  transition:
+    color var(--dur) var(--ease),
+    border-color var(--dur) var(--ease),
+    background var(--dur) var(--ease);
+}
+.follow:hover {
+  color: var(--text-1);
+  border-color: var(--border-focus);
+  background: var(--surface-3);
+}
+.followOn {
+  color: var(--pos);
+  border-color: var(--pos-dim);
+  background: var(--pos-bg);
+}
+.followOn:hover {
+  color: var(--pos);
+  border-color: var(--pos);
+}
+
+/* ── Chevron ── */
+.chev {
+  color: var(--text-4);
+  transition: transform var(--dur) var(--ease);
+}
+.chevOpen {
+  transform: rotate(90deg);
+  color: var(--text-2);
+}
+
+/* ── Detail (expanded book) ── */
+.detailRow > .detailCell {
+  padding: 0 var(--sp-4) var(--sp-4);
+  background: var(--surface-2);
+}
+.noPositions {
+  padding: var(--sp-4) var(--sp-1);
+  color: var(--text-3);
+  font-size: var(--fs-13);
+}
+
+/* ── Loading skeleton ── */
+.skeleton {
+  display: flex;
+  flex-direction: column;
+}
+.skelRow {
+  height: 45px;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(
+    90deg,
+    var(--surface-1) 0%,
+    var(--surface-2) 50%,
+    var(--surface-1) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.4s var(--ease) infinite;
+}
+@keyframes shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+@media (max-width: 720px) {
+  .hideSm {
+    display: none;
+  }
+}

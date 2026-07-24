@@ -1,0 +1,92 @@
+/* ============================================================
+   Design tokens — the single source of truth for the visual
+   system. Neutral base; color used only to carry meaning.
+   Spacing on a strict 4px scale. Two radii, not fifteen.
+   ============================================================ */
+:root {
+  /* ── Surfaces (near-black slate, each step barely lifted) ── */
+  --bg: #0a0b0d;          /* app background */
+  --surface-1: #101215;   /* panels, table container */
+  --surface-2: #16181c;   /* raised rows, inputs */
+  --surface-3: #1c1f24;   /* hover / active row */
+  --overlay: rgba(0, 0, 0, 0.6);
+
+  /* ── Borders (subtle; hairlines, never shadows for structure) ── */
+  --border: #1f2226;
+  --border-strong: #2a2e34;
+  --border-focus: #3b4048;
+
+  /* ── Ink (high-contrast primary, quieter secondaries) ── */
+  --text-1: #e7e9ec;      /* primary */
+  --text-2: #a2a8b0;      /* secondary */
+  --text-3: #6c727b;      /* muted / captions */
+  --text-4: #474c54;      /* faint / disabled */
+
+  /* ── Semantic — the ONLY chromatic colors, meaning-bearing ── */
+  --pos: #3fb865;         /* profit / up */
+  --pos-dim: #2f7d48;
+  --pos-bg: rgba(63, 184, 101, 0.10);
+  --neg: #f0616d;         /* loss / down */
+  --neg-dim: #a83e47;
+  --neg-bg: rgba(240, 97, 109, 0.10);
+  --warn: #d8a13a;        /* warning */
+  --warn-bg: rgba(216, 161, 58, 0.10);
+  --info: #4d8ef7;        /* informational / interactive accent */
+  --info-dim: #2f5aa0;
+  --info-bg: rgba(77, 142, 247, 0.12);
+
+  /* Data-ink for magnitude bars: one neutral-blue hue, light→dark */
+  --data: #5b8bd0;
+  --data-track: #191c21;
+
+  /* ── Typography ── */
+  --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto,
+    Helvetica, Arial, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Code", "SF Mono",
+    "Menlo", "Consolas", monospace;
+
+  --fs-11: 11px;
+  --fs-12: 12px;
+  --fs-13: 13px;
+  --fs-14: 14px;   /* base */
+  --fs-16: 16px;
+  --fs-20: 20px;
+  --fs-24: 24px;
+  --fs-30: 30px;
+
+  --lh-tight: 1.25;
+  --lh-base: 1.5;
+
+  --fw-normal: 440;
+  --fw-medium: 520;
+  --fw-semibold: 600;
+  --fw-bold: 680;
+
+  /* ── Spacing (4px scale) ── */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+
+  /* ── Radii (two, plus a pill) ── */
+  --r-sm: 4px;
+  --r-md: 6px;
+  --r-pill: 999px;
+
+  /* ── Motion (restrained) ── */
+  --dur: 160ms;
+  --dur-slow: 220ms;
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+
+  /* ── Layout constants ── */
+  --sidebar-w: 216px;
+  --topbar-h: 48px;
+
+  --z-topbar: 20;
+  --z-popover: 40;
+}

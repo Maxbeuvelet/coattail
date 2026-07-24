@@ -1,0 +1,16 @@
+.value {
+  font-variant-numeric: tabular-nums;
+}
+.pos {
+  color: var(--pos);
+}
+.neg {
+  color: var(--neg);
+}
+/* Zero and neutral stay ink-colored — no color without meaning. */
+.zero {
+  color: var(--text-2);
+}
+.neutral {
+  color: inherit;
+}

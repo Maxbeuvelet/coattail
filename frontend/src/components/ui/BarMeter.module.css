@@ -1,0 +1,25 @@
+.row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: var(--sp-3);
+}
+.track {
+  height: 6px;
+  background: var(--data-track);
+  border-radius: var(--r-pill);
+  overflow: hidden;
+}
+.fill {
+  height: 100%;
+  background: var(--data);
+  border-radius: var(--r-pill);
+  min-width: 2px;
+  transition: width var(--dur-slow) var(--ease);
+}
+.label {
+  font-size: var(--fs-12);
+  color: var(--text-2);
+  min-width: 52px;
+  text-align: right;
+}

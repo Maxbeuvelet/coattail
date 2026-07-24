@@ -1,0 +1,56 @@
+.wrap {
+  position: relative;
+}
+.svg {
+  display: block;
+  width: 100%;
+  height: 260px;
+  cursor: crosshair;
+}
+.baseline {
+  stroke: var(--border-strong);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+  vector-effect: non-scaling-stroke;
+}
+.baselineLabel {
+  fill: var(--text-4);
+  font-size: 10px;
+  font-family: var(--font-mono);
+}
+.crosshair {
+  stroke: var(--border-focus);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+/* Readout header row, sits above the plot (no overlap with the line). */
+.readout {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-3);
+  min-height: 34px;
+}
+.roValue {
+  font-size: var(--fs-24);
+  font-weight: var(--fw-semibold);
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.roMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.roLabel {
+  font-size: var(--fs-11);
+  color: var(--text-4);
+  font-variant-numeric: tabular-nums;
+}
+.roSub {
+  font-size: var(--fs-12);
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}

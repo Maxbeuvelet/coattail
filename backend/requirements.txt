@@ -1,0 +1,14 @@
+# Web framework
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+
+# Config / validation
+pydantic==2.10.4
+pydantic-settings==2.7.1
+python-dotenv==1.0.1
+
+# HTTP client for Polymarket public data-api
+httpx==0.28.1
+
+# Polymarket live execution (Phase 4). Signs CLOB orders (EIP-712).
+py-clob-client==0.19.0

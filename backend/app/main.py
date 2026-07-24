@@ -1,0 +1,95 @@
+"""FastAPI entrypoint for the Polymarket copy-trade bot backend.
+
+Run (from the backend/ dir):
+    uvicorn app.main:app --reload --port 8000
+"""
+from __future__ import annotations
+
+import logging
+from contextlib import asynccontextmanager
+from pathlib import Path
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+
+from app.api.routes import router as api_router
+from app.config import get_settings
+from app.db.repo import Database
+from app.polymarket.data_client import DataClient
+from app.services.config_store import ConfigStore
+from app.services.engine import FollowEngine
+from app.services.executor import PaperExecutor
+from app.services.scheduler import EngineScheduler
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+log = logging.getLogger("copybot")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    settings = get_settings()
+    app.state.settings = settings
+    app.state.data_client = DataClient(settings.data_api)
+    app.state.db = Database(settings.db_path)
+    app.state.config_store = ConfigStore(app.state.db, settings)
+
+    # Phase 2 always simulates; live execution (Phase 4) swaps the executor.
+    executor = PaperExecutor()
+    app.state.engine = FollowEngine(
+        app.state.db, app.state.data_client, app.state.config_store, executor
+    )
+    app.state.scheduler = EngineScheduler(app.state.engine, settings.engine_interval_seconds)
+
+    mode = "LIVE 🔴" if settings.live_trading else "PAPER 🟢"
+    log.warning("Copy-trade backend starting in %s mode (executor=%s)", mode, executor.mode)
+    if settings.live_trading and not settings.polygon_private_key:
+        log.error("LIVE_TRADING is on but no POLYGON_PRIVATE_KEY set — trades will fail.")
+
+    app.state.scheduler.start()
+    try:
+        yield
+    finally:
+        await app.state.scheduler.stop()
+        await app.state.data_client.aclose()
+        app.state.db.close()
+
+
+app = FastAPI(title="Polymarket Copy-Trade Bot", version="0.2.0", lifespan=lifespan)
+
+_settings = get_settings()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_settings.cors_origin_list,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(api_router)
+
+
+@app.get("/health")
+async def health() -> dict:
+    return {"ok": True, "service": "copybot-backend", "version": "0.2.0"}
+
+
+# ── Serve the built dashboard (single-server deploy) ─────────────────────────
+# If frontend/dist exists (i.e. `npm run build` has been run), serve it so the
+# whole app lives at one URL. API routes above take precedence; everything else
+# falls back to the SPA's index.html for client-side routing.
+_DIST = Path(__file__).resolve().parents[2] / "frontend" / "dist"
+
+if _DIST.is_dir():
+    @app.get("/{full_path:path}")
+    async def spa(full_path: str) -> FileResponse:
+        candidate = (_DIST / full_path).resolve()
+        # Serve a real static file when it exists and is inside dist…
+        if full_path and str(candidate).startswith(str(_DIST)) and candidate.is_file():
+            return FileResponse(candidate)
+        # …otherwise hand back index.html so React Router can take over.
+        return FileResponse(_DIST / "index.html")
+
+    log.info("Serving dashboard from %s", _DIST)
+else:
+    log.info("No frontend build found at %s — API only (run `npm run build`)", _DIST)

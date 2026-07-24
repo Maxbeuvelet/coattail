@@ -1,0 +1,119 @@
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.card {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface-1);
+  transition: border-color var(--dur) var(--ease);
+}
+.card:hover {
+  border-color: var(--border-strong);
+}
+.identity {
+  flex: 1;
+  min-width: 0;
+}
+.nameRow {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+}
+.name {
+  font-weight: var(--fw-semibold);
+  color: var(--text-1);
+}
+.addr {
+  font-size: var(--fs-11);
+  color: var(--text-4);
+}
+.meta {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-top: 2px;
+  font-size: var(--fs-12);
+  color: var(--text-3);
+}
+.dot {
+  color: var(--text-4);
+}
+.offboard {
+  color: var(--text-4);
+  font-style: italic;
+}
+.alloc {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  padding-right: var(--sp-3);
+  border-right: 1px solid var(--border);
+}
+.allocLabel {
+  font-size: var(--fs-11);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-4);
+}
+.allocValue {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--fs-13);
+  color: var(--text-2);
+  font-weight: var(--fw-medium);
+  padding: 2px 4px;
+  border-radius: var(--r-sm);
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+.allocValue:hover {
+  background: var(--surface-3);
+  color: var(--text-1);
+}
+.allocValue svg {
+  color: var(--text-4);
+}
+.allocInputWrap {
+  display: flex;
+  align-items: center;
+  height: 28px;
+  border: 1px solid var(--info);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.allocAffix {
+  padding-left: var(--sp-2);
+  color: var(--text-3);
+  font-size: var(--fs-12);
+}
+.allocInput {
+  width: 72px;
+  height: 100%;
+  padding: 0 var(--sp-2);
+  border: none;
+  background: transparent;
+  color: var(--text-1);
+  font-size: var(--fs-13);
+  font-variant-numeric: tabular-nums;
+}
+.allocInput:focus {
+  outline: none;
+}
+.allocInput::-webkit-outer-spin-button,
+.allocInput::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.note {
+  margin-top: var(--sp-2);
+  font-size: var(--fs-12);
+  color: var(--text-4);
+}

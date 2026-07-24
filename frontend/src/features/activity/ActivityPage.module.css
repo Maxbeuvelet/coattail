@@ -1,0 +1,125 @@
+.panel {
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface-1);
+}
+.loading {
+  padding: var(--sp-8);
+  text-align: center;
+  color: var(--text-3);
+  font-size: var(--fs-13);
+}
+
+.feed {
+  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface-1);
+  overflow: hidden;
+}
+.row {
+  display: grid;
+  grid-template-columns: 72px 1fr auto;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: 1px solid var(--border);
+}
+.row:last-child {
+  border-bottom: none;
+}
+.row:hover {
+  background: var(--surface-2);
+}
+
+/* ── Kind tag ── */
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 20px;
+  padding: 0 var(--sp-2);
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: var(--fs-11);
+  font-weight: var(--fw-medium);
+}
+.open {
+  color: var(--info);
+  border-color: var(--info-dim);
+  background: var(--info-bg);
+}
+.exit {
+  color: var(--pos);
+  border-color: var(--pos-dim);
+  background: var(--pos-bg);
+}
+.skip {
+  color: var(--warn);
+  border-color: color-mix(in srgb, var(--warn) 45%, transparent);
+  background: var(--warn-bg);
+}
+.engine {
+  color: var(--text-2);
+}
+
+/* ── Body ── */
+.body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.detail {
+  color: var(--text-1);
+  font-size: var(--fs-13);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.market {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: var(--fs-12);
+  color: var(--text-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.outcome {
+  flex: none;
+  padding: 0 5px;
+  border-radius: var(--r-sm);
+  background: var(--surface-3);
+  border: 1px solid var(--border-strong);
+  color: var(--text-3);
+  font-size: var(--fs-11);
+}
+
+/* ── Right ── */
+.right {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  flex: none;
+}
+.time {
+  color: var(--text-4);
+  font-size: var(--fs-12);
+  font-variant-numeric: tabular-nums;
+  min-width: 52px;
+  text-align: right;
+}
+
+@media (max-width: 560px) {
+  .row {
+    grid-template-columns: 60px 1fr;
+  }
+  .right {
+    grid-column: 2;
+    justify-content: flex-end;
+  }
+}

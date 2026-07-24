@@ -1,0 +1,57 @@
+.bar {
+  grid-area: topbar;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: var(--topbar-h);
+  padding: 0 var(--sp-5);
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  backdrop-filter: blur(6px);
+  position: sticky;
+  top: 0;
+  z-index: var(--z-topbar);
+}
+
+.left,
+.right {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+}
+
+.connection {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.connLabel {
+  font-size: var(--fs-12);
+  color: var(--text-2);
+  font-weight: var(--fw-medium);
+}
+.divider {
+  width: 1px;
+  height: 16px;
+  background: var(--border-strong);
+}
+.env {
+  font-size: var(--fs-12);
+  color: var(--text-3);
+}
+.ownerChip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--text-3);
+  transition: color var(--dur) var(--ease), border-color var(--dur) var(--ease);
+}
+.ownerChip:hover {
+  color: var(--text-1);
+  border-color: var(--border-focus);
+}

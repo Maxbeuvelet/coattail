@@ -1,0 +1,16 @@
+# Cloudflare Tunnel config for coattail.net.
+# I'll fill in the real values (tunnel id + credentials path) and save this as
+# deploy/cloudflared-config.yml once your domain is active in Cloudflare.
+#
+# It maps the public hostnames to the local app on :8000.
+
+tunnel: <TUNNEL_ID>
+credentials-file: <PATH_TO>\.cloudflared\<TUNNEL_ID>.json
+
+ingress:
+  - hostname: coattail.net
+    service: http://localhost:8000
+  - hostname: www.coattail.net
+    service: http://localhost:8000
+  # Anything else → 404
+  - service: http_status:404

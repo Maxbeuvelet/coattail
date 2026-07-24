@@ -1,0 +1,101 @@
+.sidebar {
+  grid-area: sidebar;
+  display: flex;
+  flex-direction: column;
+  width: var(--sidebar-w);
+  border-right: 1px solid var(--border);
+  background: var(--surface-1);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  height: var(--topbar-h);
+  padding: 0 var(--sp-4);
+  border-bottom: 1px solid var(--border);
+}
+.mark {
+  width: 16px;
+  height: 16px;
+  border-radius: var(--r-sm);
+  /* A restrained two-stop mark — the only place a gradient earns its keep,
+     as an identity mark, not decoration. */
+  background: linear-gradient(135deg, var(--info) 0%, var(--pos) 130%);
+}
+.wordmark {
+  font-size: var(--fs-13);
+  font-weight: var(--fw-semibold);
+  letter-spacing: -0.01em;
+  color: var(--text-1);
+}
+.dim {
+  color: var(--text-3);
+  font-weight: var(--fw-normal);
+}
+
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--sp-3) var(--sp-2);
+}
+.link {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  height: 32px;
+  padding: 0 var(--sp-3);
+  border-radius: var(--r-sm);
+  color: var(--text-3);
+  font-size: var(--fs-13);
+  font-weight: var(--fw-medium);
+  transition:
+    color var(--dur) var(--ease),
+    background var(--dur) var(--ease);
+}
+.link:hover {
+  color: var(--text-1);
+  background: var(--surface-2);
+}
+.active {
+  color: var(--text-1);
+  background: var(--surface-2);
+  box-shadow: inset 2px 0 0 var(--info);
+}
+.link svg {
+  flex: none;
+  opacity: 0.85;
+}
+.linkLabel {
+  flex: 1;
+}
+.count {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--r-pill);
+  background: var(--surface-3);
+  border: 1px solid var(--border-strong);
+  font-size: var(--fs-11);
+  color: var(--text-2);
+}
+
+.foot {
+  margin-top: auto;
+  padding: var(--sp-3) var(--sp-4);
+  border-top: 1px solid var(--border);
+}
+.footText {
+  font-size: var(--fs-11);
+  color: var(--text-4);
+}
+
+@media (max-width: 860px) {
+  .sidebar {
+    display: none;
+  }
+}

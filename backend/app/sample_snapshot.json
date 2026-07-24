@@ -1,0 +1,80 @@
+{
+  "generatedAt": "2026-07-24T00:00:00+00:00",
+  "rankedBy": "profit",
+  "topN": 10,
+  "windows": {
+    "all_time": [
+      {"rank": 1, "name": "Theo4", "wallet": "0x56687bf447db6ffa42ffe2204a05edaa20f55839", "pnl": 22053933.75, "volume": 43013258.52, "openExposure": 0.0, "positions": []},
+      {"rank": 2, "name": "Fredi9999", "wallet": "0x1f2dd6d473f3e824cd2f8a89d9c69fb96f6ad0cf", "pnl": 16619506.63, "volume": 76611316.91, "openExposure": 0.0, "positions": []},
+      {"rank": 3, "name": "kch123", "wallet": "0x6a72f61820b26b1fe4d956e17b6dc2a1ea3033ee", "pnl": 12557828.01, "volume": 290723242.43, "openExposure": 311018.62, "positions": [
+        {"title": "Will Curacao win on 2026-06-20?", "outcome": "No", "value": 88432.46, "avgPrice": 0.9532, "curPrice": 0.9605, "pnlPct": 0.76},
+        {"title": "Will France vs. Iraq end in a draw?", "outcome": "No", "value": 55924.75, "avgPrice": 0.9092, "curPrice": 0.925, "pnlPct": 1.73},
+        {"title": "Spread: Brazil (-4.5)", "outcome": "Haiti", "value": 53537.14, "avgPrice": 0.6958, "curPrice": 0.835, "pnlPct": 20.01},
+        {"title": "Will Saudi Arabia win on 2026-06-21?", "outcome": "No", "value": 45466.44, "avgPrice": 0.9599, "curPrice": 0.9625, "pnlPct": 0.26},
+        {"title": "Will Ecuador win on 2026-06-20?", "outcome": "Yes", "value": 42728.09, "avgPrice": 0.8719, "curPrice": 0.875, "pnlPct": 0.34},
+        {"title": "Will Iraq win on 2026-06-22?", "outcome": "No", "value": 36706.86, "avgPrice": 0.9653, "curPrice": 0.9745, "pnlPct": 0.94}
+      ]},
+      {"rank": 4, "name": "RN1", "wallet": "0x2005d16a84ceefa912d4e380cd32e7ff827875ea", "pnl": 9076903.17, "volume": 574707078.82, "openExposure": 110393.42, "positions": [
+        {"title": "Halle Open: Learner Tien vs Felix Auger-Aliassime", "outcome": "Felix Auger-Aliassime", "value": 37663.60, "avgPrice": 0.5303, "curPrice": 0.655, "pnlPct": 23.5},
+        {"title": "Portugal vs. DR Congo: 1st Half O/U 1.5", "outcome": "Under", "value": 25168.22, "avgPrice": 0.6228, "curPrice": 0.645, "pnlPct": 3.56},
+        {"title": "Halle Open: Learner Tien vs Felix Auger-Aliassime", "outcome": "Learner Tien", "value": 13755.33, "avgPrice": 0.4154, "curPrice": 0.3449, "pnlPct": -16.99},
+        {"title": "Dublin: Titouan Droguet vs Jerome Kym", "outcome": "Titouan Droguet", "value": 13494.75, "avgPrice": 0.5573, "curPrice": 0.9455, "pnlPct": 69.65},
+        {"title": "Nottingham Open: Dayana Yastremska vs Tatjana Maria", "outcome": "Tatjana Maria", "value": 10302.28, "avgPrice": 0.5199, "curPrice": 0.825, "pnlPct": 58.66},
+        {"title": "Grass Court Championships: Aryna Sabalenka vs Ekaterina Alexandrova", "outcome": "Aryna Sabalenka", "value": 10009.23, "avgPrice": 0.7545, "curPrice": 0.885, "pnlPct": 17.29}
+      ]},
+      {"rank": 5, "name": "swisstony", "wallet": "0x204f72f35326db932158cba6adff0b9a1da95e14", "pnl": 8797514.03, "volume": 800648490.99, "openExposure": 0.0, "positions": []},
+      {"rank": 6, "name": "Len9311238", "wallet": "0x78b9ac44a6d7d7a076c14e0ad518b301b63c6b76", "pnl": 8709972.99, "volume": 16402744.76, "openExposure": 0.0, "positions": []},
+      {"rank": 7, "name": "zxgngl", "wallet": "0xd235973291b2b75ff4070e9c0b01728c520b0f29", "pnl": 7807265.59, "volume": 40551790.62, "openExposure": 0.0, "positions": []},
+      {"rank": 8, "name": "RepTrump", "wallet": "0x863134d00841b2e200492805a01e1e2f5defaa53", "pnl": 7532409.67, "volume": 13983231.10, "openExposure": 0.0, "positions": []},
+      {"rank": 9, "name": "PrincessCaro", "wallet": "0x8119010a6e589062aa03583bb3f39ca632d9f887", "pnl": 6083643.10, "volume": 23520809.95, "openExposure": 0.0, "positions": []},
+      {"rank": 10, "name": "walletmobile", "wallet": "0xe9ad918c7678cd38b12603a762e638a5d1ee7091", "pnl": 5942685.45, "volume": 32196692.08, "openExposure": 0.0, "positions": []}
+    ],
+    "last_30d": [
+      {"rank": 1, "name": "muchobliged", "wallet": "0x095fbca2e0eaf0c9841005135427e1e0117190b2", "pnl": 3199143.16, "volume": 7958746.26, "openExposure": 0.0, "positions": []},
+      {"rank": 2, "name": "mooseborzoi", "wallet": "0x84cfffc3f16dcc353094de30d4a45226eccd2f63", "pnl": 1097201.52, "volume": 21517382.29, "openExposure": 63499.31, "positions": [
+        {"title": "Will the Republican Party control the House after the 2026 Midterm elections?", "outcome": "Yes", "value": 21798.86, "avgPrice": 0.182, "curPrice": 0.145, "pnlPct": -20.34},
+        {"title": "Will the Democratic Party control the Senate after the 2026 Midterm elections?", "outcome": "No", "value": 14726.40, "avgPrice": 0.5392, "curPrice": 0.5649, "pnlPct": 4.76},
+        {"title": "Will the Democratic Party control the House after the 2026 Midterm elections?", "outcome": "No", "value": 14180.74, "avgPrice": 0.1839, "curPrice": 0.145, "pnlPct": -21.18},
+        {"title": "Will the Los Angeles Dodgers win the 2026 World Series?", "outcome": "Yes", "value": 10873.15, "avgPrice": 0.2928, "curPrice": 0.335, "pnlPct": 14.38},
+        {"title": "Will the Philadelphia Phillies win the 2026 World Series?", "outcome": "Yes", "value": 1072.95, "avgPrice": 0.0478, "curPrice": 0.0565, "pnlPct": 18.18},
+        {"title": "Will the Boston Red Sox win the 2026 World Series?", "outcome": "Yes", "value": 847.21, "avgPrice": 0.0143, "curPrice": 0.0405, "pnlPct": 182.68}
+      ]},
+      {"rank": 3, "name": "GoalLineGhost", "wallet": "0x0346afae2603313d2bbee96b628536c8cbe352a5", "pnl": 1016934.59, "volume": 15594180.64, "openExposure": 5856.36, "positions": [
+        {"title": "Spread: Vancouver Whitecaps FC (-2.5)", "outcome": "Chicago Fire FC", "value": 1346.98, "avgPrice": 0.9081, "curPrice": 0.86, "pnlPct": -5.30},
+        {"title": "Spread: Chicago Fire FC (-2.5)", "outcome": "Vancouver Whitecaps FC", "value": 991.65, "avgPrice": 0.93, "curPrice": 0.89, "pnlPct": -4.30},
+        {"title": "Will Chicago Fire FC win on 2026-07-16?", "outcome": "Yes", "value": 921.63, "avgPrice": 0.37, "curPrice": 0.435, "pnlPct": 17.57},
+        {"title": "Will Racing Club win on 2026-07-24?", "outcome": "No", "value": 908.13, "avgPrice": 0.48, "curPrice": 0.495, "pnlPct": 3.12},
+        {"title": "Will Vancouver Whitecaps FC win on 2026-07-16?", "outcome": "Yes", "value": 853.77, "avgPrice": 0.3938, "curPrice": 0.295, "pnlPct": -25.09},
+        {"title": "Chicago Fire FC vs. Vancouver Whitecaps FC: O/U 5.5", "outcome": "Under", "value": 834.20, "avgPrice": 0.864, "curPrice": 0.88, "pnlPct": 1.85}
+      ]},
+      {"rank": 4, "name": "WhatARobbery", "wallet": "0xbf323edbbb4492ef9397917bfee804193e8a3b90", "pnl": 958125.44, "volume": 4325936.54, "openExposure": 0.0, "positions": []},
+      {"rank": 5, "name": "CandleHammerDrums", "wallet": "0x7c1ee865a785de4c00ee90ed86a38489fb8bbab3", "pnl": 861847.06, "volume": 3367371.41, "openExposure": 0.0, "positions": []},
+      {"rank": 6, "name": "0xd4aa6f8e91cfea29b66a48ebff52814", "wallet": "0x709e8dcb133555794decc598e07f2c923b8366f5", "pnl": 792557.51, "volume": 4559178.00, "openExposure": 0.0, "positions": []},
+      {"rank": 7, "name": "hot2trot", "wallet": "0xb61b2079b95f6b7476fd3203e0274ffb93308a06", "pnl": 528756.37, "volume": 3050909.70, "openExposure": 2194305.24, "positions": [
+        {"title": "France vs. Morocco: Team to Advance", "outcome": "France", "value": 1170602.73, "avgPrice": 0.7748, "curPrice": 0.9837, "pnlPct": 26.95},
+        {"title": "Will England win the 2026 FIFA World Cup?", "outcome": "Yes", "value": 544095.18, "avgPrice": 0.1182, "curPrice": 0.1605, "pnlPct": 35.69},
+        {"title": "Will Spain win the 2026 FIFA World Cup?", "outcome": "Yes", "value": 136327.66, "avgPrice": 0.1226, "curPrice": 0.1685, "pnlPct": 37.41},
+        {"title": "Will France win the 2026 FIFA World Cup?", "outcome": "Yes", "value": 124387.17, "avgPrice": 0.1842, "curPrice": 0.3985, "pnlPct": 116.33},
+        {"title": "Will Switzerland win the 2026 FIFA World Cup?", "outcome": "Yes", "value": 116818.94, "avgPrice": 0.0084, "curPrice": 0.0195, "pnlPct": 131.67},
+        {"title": "France vs. Morocco: Both Teams to Score", "outcome": "Yes", "value": 104073.56, "avgPrice": 0.3072, "curPrice": 0.225, "pnlPct": -26.78}
+      ]},
+      {"rank": 8, "name": "Jsram", "wallet": "0x83720820a8aa6c3f20ad71850e7a1a17d16c5223", "pnl": 499579.39, "volume": 5441259.52, "openExposure": 39232.81, "positions": [
+        {"title": "Will Bitcoin dip to $62,500 in July?", "outcome": "No", "value": 9133.47, "avgPrice": 0.3969, "curPrice": 0.4605, "pnlPct": 16.02},
+        {"title": "Will LeBron James play for the Miami Heat in 2026-27?", "outcome": "Yes", "value": 8608.58, "avgPrice": 0.3873, "curPrice": 0.4615, "pnlPct": 19.13},
+        {"title": "Will LeBron James play for the Cleveland Cavaliers in 2026-27?", "outcome": "Yes", "value": 6427.08, "avgPrice": 0.3837, "curPrice": 0.254, "pnlPct": -33.81},
+        {"title": "Estoril Open: Andrey Rublev vs Luca Van Assche", "outcome": "Luca Van Assche", "value": 5712.40, "avgPrice": 0.1779, "curPrice": 0.255, "pnlPct": 43.31},
+        {"title": "Will Harry Kane win the 2026 Ballon d'Or?", "outcome": "Yes", "value": 5295.54, "avgPrice": 0.3946, "curPrice": 0.4094, "pnlPct": 3.73},
+        {"title": "LoL: EDward Gaming vs Bilibili Gaming (BO3) - LPL Group Ascend", "outcome": "EDward Gaming", "value": 4055.63, "avgPrice": 0.2821, "curPrice": 0.595, "pnlPct": 110.92}
+      ]},
+      {"rank": 9, "name": "suntori", "wallet": "0xe9076a87c5ed90ef16e6fe6529c943baeca0cff6", "pnl": 499378.67, "volume": 41814267.13, "openExposure": 2112789.98, "positions": [
+        {"title": "Will the Republican Party control the Senate after the 2026 Midterm elections?", "outcome": "Yes", "value": 1054500.0, "avgPrice": 0.5, "curPrice": 0.555, "pnlPct": 11.0},
+        {"title": "Will the Republican Party control the Senate after the 2026 Midterm elections?", "outcome": "No", "value": 845500.0, "avgPrice": 0.5, "curPrice": 0.445, "pnlPct": -11.0},
+        {"title": "Will Manchester City win the 2026-27 English Premier League (EPL) Championship?", "outcome": "No", "value": 201938.64, "avgPrice": 0.7, "curPrice": 0.705, "pnlPct": 0.71},
+        {"title": "Spread: St. Louis Cardinals (-1.5)", "outcome": "Cincinnati Reds", "value": 9361.51, "avgPrice": 0.5616, "curPrice": 0.705, "pnlPct": 25.52},
+        {"title": "Will Cleveland Guardians win the 2026 AL Central title?", "outcome": "Yes", "value": 1594.44, "avgPrice": 0.61, "curPrice": 0.465, "pnlPct": -23.77},
+        {"title": "KBO: LG Twins vs. NC Dinos", "outcome": "LG Twins", "value": 295.92, "avgPrice": 0.5, "curPrice": 0.505, "pnlPct": 1.0}
+      ]},
+      {"rank": 10, "name": "ndb1", "wallet": "0xfea31bc088000ff909be1dfd8d0e3f2c7ef2d227", "pnl": 444591.43, "volume": 2192261.97, "openExposure": 0.0, "positions": []}
+    ]
+  }
+}
