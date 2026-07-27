@@ -205,13 +205,14 @@ async def add_follow(request: Request, body: FollowIn) -> dict:
     return _follow_out(row)
 
 
-@router.delete("/follows/{wallet}", status_code=204, dependencies=[Depends(require_owner)])
-async def remove_follow(request: Request, wallet: str) -> None:
+@router.delete("/follows/{wallet}", dependencies=[Depends(require_owner)])
+async def remove_follow(request: Request, wallet: str) -> dict:
     db = request.app.state.db
     existing = db.get_follow(wallet.lower())
     db.remove_follow(wallet.lower())
     if existing:
         db.log("engine", f"Unfollowed {existing['name']}", wallet=wallet.lower(), name=existing["name"])
+    return {"ok": True}
 
 
 @router.patch("/follows/{wallet}", dependencies=[Depends(require_owner)])
