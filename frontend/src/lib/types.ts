@@ -45,7 +45,7 @@ export interface RiskConfig {
   enginePaused: boolean
 }
 
-export type AutopilotRank = 'roi' | 'pnl' | 'pnl_30d'
+export type AutopilotRank = 'roi' | 'pnl' | 'pnl_30d' | 'churn'
 
 export interface Autopilot {
   enabled: boolean

@@ -89,7 +89,7 @@ class SettingsPatch(BaseModel):
     priceBandHigh: float | None = Field(default=None, ge=0, le=1)
     enginePaused: bool | None = None
     autopilotEnabled: bool | None = None
-    autopilotRank: str | None = Field(default=None, pattern="^(roi|pnl|pnl_30d)$")
+    autopilotRank: str | None = Field(default=None, pattern="^(roi|pnl|pnl_30d|churn)$")
     autopilotCount: int | None = Field(default=None, ge=1, le=25)
     autopilotMinVolume: float | None = Field(default=None, ge=0)
 

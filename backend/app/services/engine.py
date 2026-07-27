@@ -25,6 +25,28 @@ log = logging.getLogger("copybot.engine")
 # minutes is plenty and keeps the per-trader position lookups off the hot path.
 _AUTOPILOT_SYNC_SECONDS = 300
 
+# "Fast" (churn) mode: only follow/copy positions that resolve within this many
+# days, so the book turns over quickly and closed trades accrue fast.
+_FAST_MAX_DAYS = 5.0
+
+
+def _days_until(end_date: str | None) -> float | None:
+    """Days from now until a market's resolution. None if unparseable."""
+    if not end_date:
+        return None
+    try:
+        dt = datetime.fromisoformat(end_date.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return (dt - datetime.now(timezone.utc)).total_seconds() / 86400.0
+
+
+def _is_near_term(end_date: str | None) -> bool:
+    d = _days_until(end_date)
+    return d is not None and d <= _FAST_MAX_DAYS
+
 
 class FollowEngine:
     def __init__(self, db: Database, data_client: DataClient, cfg: ConfigStore, executor: Executor):
@@ -84,27 +106,46 @@ class FollowEngine:
             log.warning("autopilot leaderboard fetch failed: %s", exc)
             return {"added": 0, "removed": 0, "error": True}
 
-        if ac.autopilot_rank == "roi":
+        if ac.autopilot_rank == "churn":
+            # Fast mode: prefer traders holding the MOST soon-resolving positions,
+            # so the book turns over quickly. Scan a bounded set and score by how
+            # many near-term positions each holds.
             cand = [t for t in rows if t["volume"] >= ac.autopilot_min_volume]
-            cand.sort(key=lambda t: t["roi"], reverse=True)
+            scored: list[tuple[int, dict]] = []
+            checked = 0
+            for t in cand:
+                if checked >= 25:
+                    break
+                checked += 1
+                try:
+                    positions = await self.data.open_positions(t["wallet"], 30)
+                except Exception:  # noqa: BLE001
+                    continue
+                near = sum(1 for p in positions if _is_near_term(p.get("endDate")))
+                if near > 0:
+                    scored.append((near, t))
+            scored.sort(key=lambda x: x[0], reverse=True)
+            targets = [t for _, t in scored[: ac.autopilot_count]]
         else:
-            cand = sorted(rows, key=lambda t: t["pnl"], reverse=True)
+            if ac.autopilot_rank == "roi":
+                cand = [t for t in rows if t["volume"] >= ac.autopilot_min_volume]
+                cand.sort(key=lambda t: t["roi"], reverse=True)
+            else:
+                cand = sorted(rows, key=lambda t: t["pnl"], reverse=True)
 
-        # A copy bot can only act on traders who currently HOLD positions, so
-        # follow the best-ranked candidates that are actually active. (Empirically
-        # ~1/4 of the top 50 hold positions at any time, so scanning the list
-        # comfortably finds `count` active traders.)
-        keepers: list[dict] = []
-        for t in cand:
-            if len(keepers) >= ac.autopilot_count:
-                break
-            try:
-                if await self.data.open_positions(t["wallet"], 1):
-                    keepers.append(t)
-            except Exception:  # noqa: BLE001
-                continue
+            # A copy bot can only act on traders who currently HOLD positions, so
+            # follow the best-ranked candidates that are actually active.
+            keepers: list[dict] = []
+            for t in cand:
+                if len(keepers) >= ac.autopilot_count:
+                    break
+                try:
+                    if await self.data.open_positions(t["wallet"], 1):
+                        keepers.append(t)
+                except Exception:  # noqa: BLE001
+                    continue
+            targets = keepers
 
-        targets = keepers
         target_wallets = {t["wallet"] for t in targets}
 
         added = removed = 0
@@ -166,6 +207,8 @@ class FollowEngine:
         # Paused (or the daily-loss kill) stops NEW entries but never blocks
         # marking or exiting positions we already hold.
         block_entries = r.engine_paused or self._kill_active(r)
+        # Fast mode only copies soon-resolving positions (quick turnover).
+        fast_mode = ac.autopilot_enabled and ac.autopilot_rank == "churn"
         opened = closed = marked = errors = 0
 
         for wallet in wallets:
@@ -208,6 +251,8 @@ class FollowEngine:
                 reason = self._reject_reason(price, r)
                 if reason is None and block_entries:
                     reason = "engine paused" if r.engine_paused else "daily-loss kill switch active"
+                if reason is None and fast_mode and not _is_near_term(p.get("endDate")):
+                    reason = f"resolves >{int(_FAST_MAX_DAYS)}d out (fast mode)"
 
                 if reason is None:
                     cash = self.account()["cash"]

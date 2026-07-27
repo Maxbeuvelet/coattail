@@ -111,6 +111,7 @@ class DataClient:
                 "slug": p.get("slug", ""),
                 "conditionId": p.get("conditionId", ""),
                 "asset": p.get("asset", ""),  # ERC1155 token id — needed to trade this outcome
+                "endDate": p.get("endDate", ""),  # when the market resolves (for Fast/churn mode)
             })
             if len(out) >= max_positions:
                 break

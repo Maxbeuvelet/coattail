@@ -27,7 +27,7 @@ _AUTO_FIELDS: dict[str, type] = {
     "autopilot_min_volume": float,
 }
 _FIELDS = {**_RISK_FIELDS, **_AUTO_FIELDS}
-_AUTOPILOT_RANKS = {"roi", "pnl", "pnl_30d"}
+_AUTOPILOT_RANKS = {"roi", "pnl", "pnl_30d", "churn"}
 
 
 @dataclass

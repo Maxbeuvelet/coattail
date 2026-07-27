@@ -182,10 +182,18 @@ export function SettingsPage() {
 }
 
 const RANK_SEGMENTS = [
+  { value: 'churn' as AutopilotRank, label: 'Fast' },
   { value: 'roi' as AutopilotRank, label: 'ROI' },
   { value: 'pnl' as AutopilotRank, label: 'Profit' },
   { value: 'pnl_30d' as AutopilotRank, label: '30-day' },
 ]
+
+const RANK_LABEL: Record<AutopilotRank, string> = {
+  churn: 'fastest-resolving (quick turnover)',
+  roi: 'ROI',
+  pnl: 'all-time profit',
+  pnl_30d: '30-day profit',
+}
 const COUNT_SEGMENTS = [
   { value: '3', label: 'Top 3' },
   { value: '5', label: 'Top 5' },
@@ -227,7 +235,7 @@ function AutopilotSection({
       <p className={styles.autoLead}>
         Hands-off mode. Autopilot auto-follows the top{' '}
         <strong>{autopilot.count}</strong> <em>currently-active</em> traders by{' '}
-        <strong>{autopilot.rank === 'roi' ? 'ROI' : autopilot.rank === 'pnl' ? 'all-time profit' : '30-day profit'}</strong>{' '}
+        <strong>{RANK_LABEL[autopilot.rank]}</strong>{' '}
         and copies their positions within your risk limits — keeping the list in sync as the
         leaderboard changes. Traders you follow manually are never touched.
       </p>
@@ -253,6 +261,13 @@ function AutopilotSection({
         </div>
       </div>
 
+      {autopilot.rank === 'churn' && (
+        <p className={styles.autoNote}>
+          <strong>Fast mode:</strong> follows traders loaded with soon-resolving markets and only
+          copies positions that settle within ~5 days — so trades close quickly and your Performance
+          page fills in fast. Prioritizes turnover for quick feedback, not necessarily the best edge.
+        </p>
+      )}
       {autopilot.rank === 'roi' && (
         <p className={styles.autoNote}>
           Note: the highest-ROI traders are often flat. Autopilot only follows ones that currently
