@@ -1,0 +1,8 @@
+# Automatic HTTPS for coattail.net. Caddy provisions + renews Let's Encrypt
+# certs on its own — no manual cert steps. Requires ports 80/443 reachable and
+# the domain's DNS pointing at this server.
+
+coattail.net, www.coattail.net {
+	encode zstd gzip
+	reverse_proxy app:8000
+}

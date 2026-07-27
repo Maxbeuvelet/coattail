@@ -63,7 +63,25 @@ cd backend && .venv/Scripts/python -m uvicorn app.main:app --reload --port 8000
 cd frontend && npm run dev      # http://localhost:5173
 ```
 
-## Share it publicly with a URL (Tailscale Funnel)
+## Run it 24/7 on a public domain (recommended)
+
+To keep Coattail live around the clock — even with your PC off — deploy it to a
+small always-on **VPS** with Docker. `coattail.net` points straight at the server,
+Caddy handles HTTPS automatically, and the whole app runs in one container.
+
+**→ Full step-by-step in [`VPS-DEPLOY.md`](VPS-DEPLOY.md)** (starts with a
+one-line test to confirm the Polymarket data-api isn't geoblocked from your host).
+
+```bash
+# on the VPS, after cloning:
+echo "OWNER_KEY=$(openssl rand -base64 18)" > .env
+docker compose up -d --build
+```
+
+The options below (Tailscale Funnel, same-Wi-Fi) keep the app on your home PC —
+simpler, but only live while that PC is on.
+
+## Share from your home PC instead (Tailscale Funnel)
 
 Give the app a **free, permanent, public HTTPS URL** anyone can open — while
 keeping the controls yours. Visitors get a **read-only** dashboard; only requests

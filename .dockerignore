@@ -1,0 +1,18 @@
+# Keep the build context small + never ship secrets/state into the image.
+.git
+.gitignore
+**/node_modules
+**/.venv
+**/dist
+**/__pycache__
+*.sqlite
+*.sqlite-*
+*.db
+bin/
+**/.env
+**/.env.*
+!**/.env.example
+DEPLOY.md
+VPS-DEPLOY.md
+*.md
+scratchpad/

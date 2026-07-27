@@ -1,0 +1,39 @@
+# Full 24/7 deploy: the app + Caddy (automatic HTTPS via Let's Encrypt).
+#
+#   1. Put OWNER_KEY in a .env file next to this file.
+#   2. Point coattail.net's DNS A record at this server's IP.
+#   3. docker compose up -d --build
+#
+# Caddy fetches a TLS cert for coattail.net automatically on first run.
+
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    environment:
+      # Read-only for the public; this key unlocks control. Required.
+      - OWNER_KEY=${OWNER_KEY:?set OWNER_KEY in .env}
+      - DB_PATH=/data/copybot.sqlite
+      - LIVE_TRADING=false
+    volumes:
+      - app-data:/data
+    expose:
+      - "8000"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - app
+
+volumes:
+  app-data:
+  caddy-data:
+  caddy-config:

@@ -1,3 +1,4 @@
+# Core (paper trading + dashboard). Everything the app needs today.
 # Web framework
 fastapi==0.115.6
 uvicorn[standard]==0.34.0
@@ -10,5 +11,6 @@ python-dotenv==1.0.1
 # HTTP client for Polymarket public data-api
 httpx==0.28.1
 
-# Polymarket live execution (Phase 4). Signs CLOB orders (EIP-712).
-py-clob-client==0.19.0
+# ── Live trading (Phase 4) deps live in requirements-live.txt ──
+# py-clob-client is only needed once real CLOB execution is wired up. Keeping it
+# out of the default install keeps the Docker image small and the build reliable.
