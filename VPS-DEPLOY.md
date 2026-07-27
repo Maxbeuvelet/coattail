@@ -57,30 +57,32 @@ echo "OWNER_KEY=$(openssl rand -base64 18)" > .env
 cat .env      # copy this key — you'll need it to unlock control
 ```
 
-## Step 5 — Point the domain at this server
-
-In your DNS (registrar or Cloudflare), add an **A record**:
-- `coattail.net`  →  `YOUR_SERVER_IP`
-- `www.coattail.net`  →  `YOUR_SERVER_IP`
-
-If you use Cloudflare, set these to **DNS only (grey cloud)** for the first run so
-Caddy can obtain the certificate; you can enable the proxy later. Wait a few
-minutes for DNS to propagate (`ping coattail.net` should show your server IP).
-
-## Step 6 — Launch
+## Step 5 — Launch (works immediately on the IP)
 
 ```bash
 docker compose up -d --build
 ```
-First boot builds the image and Caddy fetches the HTTPS cert (~30s). Check it:
-```bash
-docker compose logs -f      # watch startup; Ctrl-C to stop watching
-```
+First boot builds the image (~1–2 min). By default it serves plain HTTP, so open:
+
+- **http://YOUR_SERVER_IP** — live, read-only, 24/7.
+- **http://YOUR_SERVER_IP/?key=YOUR_OWNER_KEY** (once per device) to control it.
+
+Watch startup with `docker compose logs -f` (Ctrl-C to stop watching).
+
+## Step 6 — Add the domain + HTTPS (when you own it)
+
+1. In your DNS, add **A records** → `coattail.net` and `www.coattail.net` →
+   `YOUR_SERVER_IP` (Cloudflare users: **DNS only / grey cloud** for the first run).
+   Confirm with `ping coattail.net`.
+2. Tell Caddy to use the domain by adding a line to `.env`, then relaunch:
+   ```bash
+   echo "SITE_ADDRESS=coattail.net" >> .env
+   docker compose up -d
+   ```
+   Caddy fetches a Let's Encrypt cert automatically (~30s) → **https://coattail.net**.
 
 ## Done
 
-- **Public:** https://coattail.net — live, read-only, 24/7.
-- **You:** https://coattail.net/?key=YOUR_OWNER_KEY (once per device) to control it.
 - Survives reboots (`restart: unless-stopped`). Your PC can be off.
 
 ---

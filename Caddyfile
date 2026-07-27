@@ -1,8 +1,9 @@
-# Automatic HTTPS for coattail.net. Caddy provisions + renews Let's Encrypt
-# certs on its own — no manual cert steps. Requires ports 80/443 reachable and
-# the domain's DNS pointing at this server.
+# The site address comes from $SITE_ADDRESS (docker-compose sets it).
+#   default ":80"      → plain HTTP on any host — reach it at http://<server-ip>
+#   "coattail.net"     → automatic HTTPS once the domain's DNS points here
+# Switch to the domain later by setting SITE_ADDRESS=coattail.net in .env.
 
-coattail.net, www.coattail.net {
+{$SITE_ADDRESS::80} {
 	encode zstd gzip
 	reverse_proxy app:8000
 }

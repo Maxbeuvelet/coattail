@@ -23,6 +23,10 @@ services:
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
+    environment:
+      # ":80" (default) serves plain HTTP by IP. Set SITE_ADDRESS=coattail.net
+      # in .env later for automatic HTTPS on the domain.
+      - SITE_ADDRESS=${SITE_ADDRESS:-:80}
     ports:
       - "80:80"
       - "443:443"
