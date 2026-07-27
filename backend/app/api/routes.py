@@ -135,6 +135,9 @@ async def patch_settings(request: Request, body: SettingsPatch) -> dict:
 async def engine_reset(request: Request) -> dict:
     """Wipe follows, book and history (keeps your risk/autopilot config)."""
     request.app.state.db.reset_book()
+    # Force Autopilot to re-select on the next tick instead of waiting out its
+    # throttle — otherwise the book sits empty for minutes after a reset.
+    request.app.state.engine._autopilot_last_run = None
     request.app.state.db.log("engine", "Book reset — follows, positions and history cleared")
     return {"ok": True}
 
