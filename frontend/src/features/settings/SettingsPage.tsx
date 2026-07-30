@@ -10,12 +10,13 @@ import { Icon } from '@/components/ui/Icon'
 import { SegmentedControl } from '@/components/ui/SegmentedControl'
 import { useResetBook, useSettings, useStatus, useUpdateSettings } from '@/lib/queries'
 import { useOwner } from '@/lib/owner'
-import type { AutopilotRank, RiskConfig, SettingsPatch } from '@/lib/types'
+import type { AutopilotRank, RiskConfig, SettingsPatch, SizeMode } from '@/lib/types'
 import { ApiError } from '@/lib/api'
 import styles from './SettingsPage.module.css'
 
 interface Draft {
   bankrollUsd: string
+  sizePct: string
   maxUsdPerPosition: string
   maxOpenPositions: string
   dailyLossKillPct: string
@@ -26,6 +27,7 @@ interface Draft {
 function toDraft(r: RiskConfig): Draft {
   return {
     bankrollUsd: String(r.bankrollUsd),
+    sizePct: String(round(r.sizePct * 100)),
     maxUsdPerPosition: String(r.maxUsdPerPosition),
     maxOpenPositions: String(r.maxOpenPositions),
     dailyLossKillPct: String(round(r.dailyLossKillPct * 100)),
@@ -60,6 +62,7 @@ export function SettingsPage() {
     if (!draft) return
     const patch: SettingsPatch = {
       bankrollUsd: Number(draft.bankrollUsd),
+      sizePct: Number(draft.sizePct) / 100,
       maxUsdPerPosition: Number(draft.maxUsdPerPosition),
       maxOpenPositions: Number(draft.maxOpenPositions),
       dailyLossKillPct: Number(draft.dailyLossKillPct) / 100,
@@ -70,6 +73,7 @@ export function SettingsPage() {
   }
 
   const paused = settings?.enginePaused ?? false
+  const sizeMode = settings?.sizeMode ?? 'fixed'
 
   return (
     <Page>
@@ -146,9 +150,37 @@ export function SettingsPage() {
 
         {draft && (
           <>
+            <div className={styles.sizingRow}>
+              <div>
+                <span className={styles.pauseLabel}>Position sizing</span>
+                <span className={styles.pauseState}>
+                  {sizeMode === 'equity_pct'
+                    ? 'Each bet is a % of your current equity — grows as you win (compounds)'
+                    : 'Each bet is a flat dollar amount, regardless of equity'}
+                </span>
+              </div>
+              {isOwner ? (
+                <SegmentedControl
+                  ariaLabel="Position sizing mode"
+                  segments={[
+                    { value: 'fixed', label: 'Fixed $' },
+                    { value: 'equity_pct', label: '% of equity' },
+                  ]}
+                  value={sizeMode}
+                  onChange={(v) => update.mutate({ sizeMode: v as SizeMode })}
+                />
+              ) : (
+                <Badge>{sizeMode === 'equity_pct' ? '% of equity' : 'Fixed $'}</Badge>
+              )}
+            </div>
+
             <div className={styles.grid}>
-              <NumberField label="Bankroll" prefix="$" value={draft.bankrollUsd} onChange={set('bankrollUsd')} hint="Capital the sizing scales against." disabled={!isOwner} />
-              <NumberField label="Max per position" prefix="$" value={draft.maxUsdPerPosition} onChange={set('maxUsdPerPosition')} hint="Fixed cap on any single copied position." disabled={!isOwner} />
+              <NumberField label="Bankroll" prefix="$" value={draft.bankrollUsd} onChange={set('bankrollUsd')} hint="Starting capital / the P&L baseline." disabled={!isOwner} />
+              {sizeMode === 'equity_pct' ? (
+                <NumberField label="Size per position" suffix="%" value={draft.sizePct} onChange={set('sizePct')} hint="Each bet = this % of current equity. ~2% keeps a cash buffer." disabled={!isOwner} />
+              ) : (
+                <NumberField label="Max per position" prefix="$" value={draft.maxUsdPerPosition} onChange={set('maxUsdPerPosition')} hint="Flat $ cap on any single copied position." disabled={!isOwner} />
+              )}
               <NumberField label="Max open positions" value={draft.maxOpenPositions} onChange={set('maxOpenPositions')} hint="Portfolio breadth limit." disabled={!isOwner} />
               <NumberField label="Daily-loss kill" suffix="%" value={draft.dailyLossKillPct} onChange={set('dailyLossKillPct')} hint="Halt new copies after this drawdown in a day." disabled={!isOwner} />
               <NumberField label="Price band — low" suffix="%" value={draft.priceBandLowPct} onChange={set('priceBandLowPct')} hint="Skip longshots below this price." disabled={!isOwner} />

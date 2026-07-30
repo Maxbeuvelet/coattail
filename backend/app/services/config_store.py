@@ -13,7 +13,9 @@ from app.db.repo import Database
 # field -> python type (used to (de)serialize the string values in the DB)
 _RISK_FIELDS: dict[str, type] = {
     "bankroll_usd": float,
-    "max_usd_per_position": float,
+    "size_mode": str,               # 'fixed' (flat $) | 'equity_pct' (% of equity)
+    "size_pct": float,              # used when size_mode == 'equity_pct'
+    "max_usd_per_position": float,  # used when size_mode == 'fixed'
     "max_open_positions": int,
     "daily_loss_kill_pct": float,
     "price_band_low": float,
@@ -33,6 +35,8 @@ _AUTOPILOT_RANKS = {"roi", "pnl", "pnl_30d", "churn"}
 @dataclass
 class RiskView:
     bankroll_usd: float
+    size_mode: str
+    size_pct: float
     max_usd_per_position: float
     max_open_positions: int
     daily_loss_kill_pct: float
@@ -65,6 +69,10 @@ def _validate(view: dict) -> None:
         raise ValueError("bankroll_usd must be > 0")
     if view["max_usd_per_position"] <= 0:
         raise ValueError("max_usd_per_position must be > 0")
+    if view["size_mode"] not in ("fixed", "equity_pct"):
+        raise ValueError("size_mode must be 'fixed' or 'equity_pct'")
+    if not (0 < view["size_pct"] <= 0.5):
+        raise ValueError("size_pct must be between 0 and 0.5")
     if view["max_open_positions"] < 1:
         raise ValueError("max_open_positions must be >= 1")
     if not (0 <= view["daily_loss_kill_pct"] <= 1):
@@ -85,6 +93,8 @@ class ConfigStore:
         self.db = db
         self._defaults: dict[str, object] = {
             "bankroll_usd": settings.bankroll_usd,
+            "size_mode": "fixed",
+            "size_pct": 0.02,
             "max_usd_per_position": settings.max_usd_per_position,
             "max_open_positions": settings.max_open_positions,
             "daily_loss_kill_pct": settings.daily_loss_kill_pct,

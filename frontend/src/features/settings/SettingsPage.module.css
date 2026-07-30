@@ -141,6 +141,17 @@
   border-radius: var(--r-sm);
 }
 
+/* ── Sizing mode row ── */
+.sizingRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  margin-bottom: var(--sp-5);
+  padding-bottom: var(--sp-4);
+  border-bottom: 1px solid var(--border);
+}
+
 /* ── Engine pause row ── */
 .pauseRow {
   display: flex;

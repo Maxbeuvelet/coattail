@@ -39,6 +39,8 @@ async def whoami(
 def _risk_out(r) -> dict:
     return {
         "bankrollUsd": r.bankroll_usd,
+        "sizeMode": r.size_mode,
+        "sizePct": r.size_pct,
         "maxUsdPerPosition": r.max_usd_per_position,
         "maxOpenPositions": r.max_open_positions,
         "dailyLossKillPct": r.daily_loss_kill_pct,
@@ -82,6 +84,8 @@ async def status(request: Request) -> dict:
 
 class SettingsPatch(BaseModel):
     bankrollUsd: float | None = Field(default=None, gt=0)
+    sizeMode: str | None = Field(default=None, pattern="^(fixed|equity_pct)$")
+    sizePct: float | None = Field(default=None, gt=0, le=0.5)
     maxUsdPerPosition: float | None = Field(default=None, gt=0)
     maxOpenPositions: int | None = Field(default=None, ge=1)
     dailyLossKillPct: float | None = Field(default=None, ge=0, le=1)
@@ -96,6 +100,8 @@ class SettingsPatch(BaseModel):
 
 _PATCH_TO_FIELD = {
     "bankrollUsd": "bankroll_usd",
+    "sizeMode": "size_mode",
+    "sizePct": "size_pct",
     "maxUsdPerPosition": "max_usd_per_position",
     "maxOpenPositions": "max_open_positions",
     "dailyLossKillPct": "daily_loss_kill_pct",

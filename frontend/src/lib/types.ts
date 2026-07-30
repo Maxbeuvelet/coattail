@@ -36,8 +36,12 @@ export interface Snapshot {
   _note?: string
 }
 
+export type SizeMode = 'fixed' | 'equity_pct'
+
 export interface RiskConfig {
   bankrollUsd: number
+  sizeMode: SizeMode
+  sizePct: number
   maxUsdPerPosition: number
   maxOpenPositions: number
   dailyLossKillPct: number
@@ -62,6 +66,8 @@ export interface Settings extends RiskConfig {
 /** Patch body for PATCH /api/settings — any subset. */
 export interface SettingsPatch {
   bankrollUsd?: number
+  sizeMode?: SizeMode
+  sizePct?: number
   maxUsdPerPosition?: number
   maxOpenPositions?: number
   dailyLossKillPct?: number

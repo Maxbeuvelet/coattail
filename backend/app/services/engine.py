@@ -81,11 +81,16 @@ class FollowEngine:
         realized_today = self.db.realized_since(midnight.isoformat())
         return realized_today <= -abs(r.daily_loss_kill_pct) * r.bankroll_usd
 
-    def _stake(self, follow: dict, cash: float, r: RiskView) -> float:
-        cap = r.max_usd_per_position
-        alloc = follow.get("allocation_usd")
-        # Per-trader allocation, when set, overrides the global per-position cap.
-        stake = min(cap, alloc) if alloc else cap
+    def _stake(self, follow: dict, cash: float, r: RiskView, equity: float) -> float:
+        if r.size_mode == "equity_pct":
+            # Compound: each bet is a % of current equity, so size grows as you
+            # win and shrinks as you lose.
+            stake = equity * r.size_pct
+        else:
+            cap = r.max_usd_per_position
+            alloc = follow.get("allocation_usd")
+            # Per-trader allocation, when set, overrides the global per-position cap.
+            stake = min(cap, alloc) if alloc else cap
         return min(stake, cash)
 
     @staticmethod
@@ -255,8 +260,8 @@ class FollowEngine:
                     reason = f"resolves >{int(_FAST_MAX_DAYS)}d out (fast mode)"
 
                 if reason is None:
-                    cash = self.account()["cash"]
-                    stake = self._stake(follow, cash, r)
+                    acct = self.account()
+                    stake = self._stake(follow, acct["cash"], r, acct["equity"])
                     if stake < 1:
                         if newly:
                             self.db.log("skip", "insufficient cash", wallet=wallet, name=name,
