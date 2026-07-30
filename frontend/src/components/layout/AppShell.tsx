@@ -2,6 +2,7 @@
 import { Outlet } from 'react-router-dom'
 import { Sidebar } from './Sidebar'
 import { TopBar } from './TopBar'
+import { MobileNav } from './MobileNav'
 import styles from './AppShell.module.css'
 
 export function AppShell() {
@@ -9,6 +10,7 @@ export function AppShell() {
     <div className={styles.shell}>
       <Sidebar />
       <TopBar />
+      <MobileNav />
       <main className={styles.content}>
         <Outlet />
       </main>

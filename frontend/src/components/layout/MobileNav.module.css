@@ -1,0 +1,55 @@
+/* Hidden on desktop (the left sidebar handles nav there). */
+.nav {
+  display: none;
+}
+
+@media (max-width: 860px) {
+  .nav {
+    grid-area: mobilenav;
+    display: flex;
+    gap: var(--sp-1);
+    padding: var(--sp-2) var(--sp-2);
+    overflow-x: auto;
+    scrollbar-width: none;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface-1);
+  }
+  .nav::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex: none;
+  height: 34px;
+  padding: 0 var(--sp-3);
+  border-radius: var(--r-sm);
+  color: var(--text-3);
+  font-size: var(--fs-13);
+  font-weight: var(--fw-medium);
+  white-space: nowrap;
+}
+.tab svg {
+  opacity: 0.85;
+}
+.active {
+  color: var(--text-1);
+  background: var(--surface-3);
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+}
+.count {
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--r-pill);
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  font-size: var(--fs-11);
+  color: var(--text-2);
+}

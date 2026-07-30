@@ -17,8 +17,10 @@
 @media (max-width: 860px) {
   .shell {
     grid-template-columns: 1fr;
+    grid-template-rows: var(--topbar-h) auto 1fr;
     grid-template-areas:
       'topbar'
+      'mobilenav'
       'content';
   }
 }
