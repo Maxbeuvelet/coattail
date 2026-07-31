@@ -1,5 +1,5 @@
-"""Deep scan of open Polymarket US markets: is there ANY soccer? Signs path-only.
-Reads keys from .env (gitignored). Run from repo root."""
+"""Hunt specifically for the soccer the user sees (Henan/Dalian) in the US API,
+plus collect categories/tags. Signs path-only. Reads keys from .env. Run from root."""
 import time, base64, json, urllib.request, urllib.error
 from pathlib import Path
 from cryptography.hazmat.primitives.asymmetric import ed25519
@@ -22,28 +22,30 @@ def get(path):
     except urllib.error.HTTPError as e:
         return {"_err": e.code}
 
-TEAMS = ["paok","hammarby","panathinaik","auda","tromso","gent","benfica","rijeka",
-         "larnaca","flora","derry","cherkasy","kyiv","hajduk","dynamo","celtic","arsenal"]
-SOCCER_WORDS = ["fc ","fk ","sc ","cf ","1st half","o/u","draw"]
+# 1) quick filter-param attempts for "Henan"
+print("--- filter-param attempts ---")
+for p in ["/v1/markets?q=Henan","/v1/markets?search=Henan","/v1/markets?question=Henan","/v1/markets?title=Henan","/v1/markets?category=soccer&limit=3"]:
+    d=get(p); n=len(d.get("markets",[])) if "_err" not in d else d
+    print(f"  {p} -> {n}")
 
-seen=set(); questions=[]; first=None
-for off in range(0, 12001, 200):
-    d = get(f"/v1/markets?closed=false&limit=200&offset={off}")
+# 2) deep deduped scan, hunt Henan/Dalian/soccer, collect tags/categories
+ids=set(); qs=[]; tags=set(); cats=set(); off=0; empty=0
+while off<=40000:
+    d=get(f"/v1/markets?closed=false&limit=200&offset={off}")
     if "_err" in d: print("stopped:",d); break
-    ms = d.get("markets",[])
-    if not ms: break
-    if first is None: first = ms[0]
+    ms=d.get("markets",[]); new=0
     for m in ms:
-        q=m.get("question",""); questions.append(q)
-    time.sleep(0.08)
+        mid=m.get("id")
+        if mid in ids: continue
+        ids.add(mid); new+=1; qs.append(m.get("question",""))
+        cats.add(m.get("category","")); 
+        for t in (m.get("tags") or []): tags.add(str(t)[:24])
+    if new==0: empty+=1
+    if empty>=3: break
+    off+=200; time.sleep(0.06)
 
-print("first market ALL fields:", list(first.keys()) if first else None)
-print("total open markets scanned:", len(questions))
-team_hits=[q for q in questions if any(t in q.lower() for t in TEAMS)]
-word_hits=[q for q in questions if any(w in q.lower() for w in SOCCER_WORDS)]
-print("EXACT team hits:", len(team_hits), team_hits[:6])
-print("soccer-word hits:", len(word_hits), word_hits[:6])
-# distinct-ish sample of what IS there
-import collections
-firsts=collections.Counter(q.split(" vs")[0].split(":")[0][:14] for q in questions)
-print("most common market prefixes:", firsts.most_common(12))
+print(f"\nunique markets: {len(ids)}")
+print("categories seen:", sorted(cats))
+print("tags sample:", sorted(tags)[:40])
+hits=[q for q in qs if any(w in q.lower() for w in ["henan","dalian","yingbo","chinese","super lg","soccer","football club"])]
+print("Henan/Dalian/soccer hits:", len(hits), hits[:8])
