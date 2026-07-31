@@ -84,7 +84,7 @@ export function PerformancePage() {
               <span className={styles.compareDot} style={{ background: 'var(--info)' }} />
               If executed on Polymarket US
             </h2>
-            <span className={styles.panelHint}>same trades, real US prices — the honest cross-venue test</span>
+            <span className={styles.panelHint}>same trades, real US prices + est. fee — the honest cross-venue test</span>
           </div>
           {us && us.closedCount > 0 ? (
             <>

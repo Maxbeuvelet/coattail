@@ -29,6 +29,12 @@ log = logging.getLogger("copybot.engine")
 # entries we price per tick to keep the hot path fast; exits are always priced.
 _US_ENTRY_BUDGET_PER_TICK = 12
 
+# Estimated all-in Polymarket US trading cost, per share, round-trip. The
+# entry-price gap (measured, real) is the dominant drag; this fee is an estimate
+# on top of it so the US curve reflects a realistic, not optimistic, result.
+# Tune when the real fee schedule is confirmed.
+_US_FEE_PER_SHARE = 0.02
+
 
 # The leaderboard churns slowly; re-selecting the auto-follow set every few
 # minutes is plenty and keeps the per-trader position lookups off the hot path.
@@ -225,7 +231,8 @@ class FollowEngine:
         if not us or us <= 0:
             us = pos["cur_price"]
         us_shares = pos["stake_usd"] / entry if entry > 0 else 0.0
-        us_realized = round(us_shares * us - pos["stake_usd"], 2)
+        fee = us_shares * _US_FEE_PER_SHARE  # round-trip US trading cost (estimate)
+        us_realized = round(us_shares * us - pos["stake_usd"] - fee, 2)
         self.db.set_us_exit(pos["id"], round(us, 4), us_realized)
 
     # ── the tick ─────────────────────────────────────────────
