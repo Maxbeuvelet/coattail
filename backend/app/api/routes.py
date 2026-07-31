@@ -256,6 +256,11 @@ def _position_out(p: dict) -> dict:
         "exitPrice": p.get("exit_price"),
         "closedAt": p.get("closed_at"),
         "realizedPnl": p.get("realized_pnl"),
+        # US shadow: the same trade priced on Polymarket US (null if unmatched),
+        # exposed so the comparison is auditable trade-by-trade.
+        "usEntry": p.get("us_entry"),
+        "usExit": p.get("us_exit"),
+        "usRealized": p.get("us_realized"),
     }
 
 
