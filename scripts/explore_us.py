@@ -1,5 +1,5 @@
-"""Hunt specifically for the soccer the user sees (Henan/Dalian) in the US API,
-plus collect categories/tags. Signs path-only. Reads keys from .env. Run from root."""
+"""Pull the soccer category from Polymarket US and check for the bot's teams.
+Signs path-only. Reads keys from .env. Run from repo root."""
 import time, base64, json, urllib.request, urllib.error
 from pathlib import Path
 from cryptography.hazmat.primitives.asymmetric import ed25519
@@ -22,30 +22,27 @@ def get(path):
     except urllib.error.HTTPError as e:
         return {"_err": e.code}
 
-# 1) quick filter-param attempts for "Henan"
-print("--- filter-param attempts ---")
-for p in ["/v1/markets?q=Henan","/v1/markets?search=Henan","/v1/markets?question=Henan","/v1/markets?title=Henan","/v1/markets?category=soccer&limit=3"]:
-    d=get(p); n=len(d.get("markets",[])) if "_err" not in d else d
-    print(f"  {p} -> {n}")
+# Does ?q= actually filter? dump the questions it returns.
+print("=== ?q=Henan returns these questions ===")
+for m in get("/v1/markets?q=Henan").get("markets", [])[:8]:
+    print("  •", m.get("question","")[:55], "|", m.get("category",""))
 
-# 2) deep deduped scan, hunt Henan/Dalian/soccer, collect tags/categories
-ids=set(); qs=[]; tags=set(); cats=set(); off=0; empty=0
-while off<=40000:
-    d=get(f"/v1/markets?closed=false&limit=200&offset={off}")
+# Pull soccer category, paginate, search for whale teams
+print("\n=== category=soccer scan ===")
+ids=set(); qs=[]; off=0; empty=0
+while off<=20000:
+    d=get(f"/v1/markets?category=soccer&closed=false&limit=200&offset={off}")
     if "_err" in d: print("stopped:",d); break
     ms=d.get("markets",[]); new=0
     for m in ms:
-        mid=m.get("id")
-        if mid in ids: continue
-        ids.add(mid); new+=1; qs.append(m.get("question",""))
-        cats.add(m.get("category","")); 
-        for t in (m.get("tags") or []): tags.add(str(t)[:24])
+        i=m.get("id")
+        if i in ids: continue
+        ids.add(i); new+=1; qs.append(m.get("question",""))
     if new==0: empty+=1
-    if empty>=3: break
+    if empty>=2 or not ms: break
     off+=200; time.sleep(0.06)
-
-print(f"\nunique markets: {len(ids)}")
-print("categories seen:", sorted(cats))
-print("tags sample:", sorted(tags)[:40])
-hits=[q for q in qs if any(w in q.lower() for w in ["henan","dalian","yingbo","chinese","super lg","soccer","football club"])]
-print("Henan/Dalian/soccer hits:", len(hits), hits[:8])
+print("unique soccer markets:", len(qs))
+print("sample:", [q[:40] for q in qs[:12]])
+TEAMS=["henan","dalian","paok","hammarby","panathinaik","auda","tromso","gent","new saints","flora","rijeka"]
+hits=[q for q in qs if any(t in q.lower() for t in TEAMS)]
+print("whale-team hits in soccer category:", len(hits), hits[:8])
