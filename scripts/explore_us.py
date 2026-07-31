@@ -1,5 +1,5 @@
-"""Probe Polymarket US endpoints to find the markets/events listing. Reads keys
-from .env at runtime (gitignored). Run from repo root."""
+"""Search Polymarket US for the bot's whale markets. Signs PATH ONLY (no query).
+Reads keys from .env (gitignored). Run from repo root."""
 import time, base64, json, urllib.request, urllib.error
 from pathlib import Path
 from cryptography.hazmat.primitives.asymmetric import ed25519
@@ -17,7 +17,8 @@ priv = ed25519.Ed25519PrivateKey.from_private_bytes(
 
 def get(path):
     ts = str(int(time.time() * 1000))
-    sig = base64.b64encode(priv.sign(f"{ts}GET{path}".encode())).decode()
+    sign_path = path.split("?")[0]  # <-- sign path WITHOUT query string
+    sig = base64.b64encode(priv.sign(f"{ts}GET{sign_path}".encode())).decode()
     req = urllib.request.Request(
         "https://api.polymarket.us" + path,
         headers={
@@ -35,17 +36,11 @@ def get(path):
         return e.code, e.read().decode(errors="replace")
 
 
-candidates = [
-    "/v1/markets?limit=3",
-    "/v1/markets",
-    "/v1/events?limit=3",
-    "/v1/events",
-    "/v1/refdata/symbols",
-    "/v1/instruments?limit=3",
-    "/v1/marketdata/markets?limit=3",
-    "/v1/search?q=PAOK",
-]
-for path in candidates:
-    code, body = get(path)
-    flag = "  <== 200 OK" if code == 200 else ""
-    print(f"\nHTTP {code}  {path}{flag}\n  {body[:180]}")
+print("=== one market's full shape (for mapping) ===")
+code, body = get("/v1/markets?limit=1")
+print(f"HTTP {code}\n{body[:900]}")
+
+print("\n=== SEARCH for your whales' teams (does US carry them?) ===")
+for team in ["PAOK", "Hammarby", "Panathinaikos", "Auda", "Chiefs"]:
+    code, body = get(f"/v1/search?q={team}")
+    print(f"\n[{team}] search -> HTTP {code}\n  {body[:220]}")
