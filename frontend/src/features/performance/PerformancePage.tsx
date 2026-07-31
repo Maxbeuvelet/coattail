@@ -77,7 +77,7 @@ export function PerformancePage() {
       {/* ── US shadow: the same trades priced on Polymarket US (the venue you can
             actually, legally trade). If this curve trails the one above, the
             cross-venue price gap — not the picks — is where the edge dies. ── */}
-      {perf && (
+      {perf && us && (
         <div className={`${styles.panel} ${styles.usPanel}`}>
           <div className={styles.panelHead}>
             <h2 className={styles.panelTitle}>
@@ -86,7 +86,7 @@ export function PerformancePage() {
             </h2>
             <span className={styles.panelHint}>same trades, real US prices + est. fee — the honest cross-venue test</span>
           </div>
-          {us && us.closedCount > 0 ? (
+          {us.closedCount > 0 ? (
             <>
               <div className={styles.compare}>
                 <div className={styles.compareItem}>
