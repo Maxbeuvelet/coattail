@@ -161,11 +161,14 @@ class Database:
                FROM positions
                WHERE status = 'closed' AND us_entry IS NOT NULL AND us_exit IS NOT NULL"""
         ) or {}
+        # Denominator = trades OPENED since this feature went live (they carry an
+        # event_slug; older trades predate it and never had a US lookup, so
+        # counting them would crush the match rate with ineligible history).
         coverage = self._row(
             """SELECT
                  COUNT(*) AS total,
                  COALESCE(SUM(CASE WHEN us_entry IS NOT NULL THEN 1 ELSE 0 END), 0) AS matched
-               FROM positions"""
+               FROM positions WHERE event_slug IS NOT NULL AND event_slug != ''"""
         ) or {}
         realized["matched"] = int(coverage.get("matched", 0) or 0)
         realized["totalTrades"] = int(coverage.get("total", 0) or 0)
