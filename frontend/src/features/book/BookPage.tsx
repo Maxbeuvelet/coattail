@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/Badge'
 import { Value } from '@/components/ui/Value'
 import { SegmentedControl } from '@/components/ui/SegmentedControl'
 import { useBook, useStatus } from '@/lib/queries'
-import { usd, cents, timeAgo, signedUsd2 } from '@/lib/format'
+import { usd, timeAgo, signedUsd2 } from '@/lib/format'
 import type { BookPosition } from '@/lib/types'
 import styles from './BookPage.module.css'
 
@@ -96,18 +96,15 @@ function BookTable({ rows, tab }: { rows: BookPosition[]; tab: Tab }) {
     <table className={styles.table}>
       <thead>
         <tr>
-          <th>Market · outcome</th>
-          <th className={styles.num}>Copied from</th>
-          <th className={styles.num}>Stake</th>
-          <th className={styles.num}>{tab === 'open' ? 'Entry → now' : 'Entry → exit'}</th>
-          <th className={styles.num}>{tab === 'open' ? 'Unrealized' : 'Realized'}</th>
+          <th>The bet</th>
+          <th className={styles.num}>Placed</th>
+          <th className={styles.num}>{tab === 'open' ? 'Unrealized' : 'Gain / loss'}</th>
           <th className={styles.num}>{tab === 'open' ? 'Opened' : 'Closed'}</th>
         </tr>
       </thead>
       <tbody>
         {rows.map((p) => {
           const pnl = tab === 'open' ? p.unrealized : (p.realizedPnl ?? 0)
-          const endPrice = tab === 'open' ? p.curPrice : (p.exitPrice ?? p.curPrice)
           const when = tab === 'open' ? p.openedAt : (p.closedAt ?? p.openedAt)
           return (
             <tr key={p.id}>
@@ -115,13 +112,7 @@ function BookTable({ rows, tab }: { rows: BookPosition[]; tab: Tab }) {
                 <span className={styles.title}>{p.title}</span>
                 <span className={styles.outcome}>{p.outcome}</span>
               </td>
-              <td className={`${styles.num} ${styles.from}`}>{p.name}</td>
               <td className={`${styles.num} tnum`}>{usd(p.stakeUsd)}</td>
-              <td className={`${styles.num} ${styles.move}`}>
-                <span className="tnum">{cents(p.entryPrice)}</span>
-                <span className={styles.arrow}>→</span>
-                <span className="tnum">{cents(endPrice)}</span>
-              </td>
               <td className={styles.num}>
                 <Value value={pnl}>{signedUsd2(pnl)}</Value>
               </td>
