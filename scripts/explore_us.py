@@ -1,7 +1,5 @@
-"""Explore / diagnose the Polymarket US API. Reads keys from .env at runtime
-(gitignored); no secrets stored here. Run from repo root:
-    python3 scripts/explore_us.py
-"""
+"""Probe Polymarket US endpoints to find the markets/events listing. Reads keys
+from .env at runtime (gitignored). Run from repo root."""
 import time, base64, json, urllib.request, urllib.error
 from pathlib import Path
 from cryptography.hazmat.primitives.asymmetric import ed25519
@@ -37,14 +35,17 @@ def get(path):
         return e.code, e.read().decode(errors="replace")
 
 
-for path in ["/v1/refdata/instruments", "/v1/portfolio/positions", "/v1/portfolio/balance"]:
+candidates = [
+    "/v1/markets?limit=3",
+    "/v1/markets",
+    "/v1/events?limit=3",
+    "/v1/events",
+    "/v1/refdata/symbols",
+    "/v1/instruments?limit=3",
+    "/v1/marketdata/markets?limit=3",
+    "/v1/search?q=PAOK",
+]
+for path in candidates:
     code, body = get(path)
-    print(f"\n=== {path}  ->  HTTP {code} ===")
-    print(body[:800])
-
-# also: what does the US site think of this server's IP?
-try:
-    with urllib.request.urlopen("https://polymarket.us/api/geoblock", timeout=15) as r:
-        print("\n=== geoblock (this server's IP) ===\n" + r.read().decode()[:300])
-except Exception as e:
-    print("\ngeoblock check:", e)
+    flag = "  <== 200 OK" if code == 200 else ""
+    print(f"\nHTTP {code}  {path}{flag}\n  {body[:180]}")
