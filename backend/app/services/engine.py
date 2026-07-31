@@ -29,6 +29,11 @@ log = logging.getLogger("copybot.engine")
 # entries we price per tick to keep the hot path fast; exits are always priced.
 _US_ENTRY_BUDGET_PER_TICK = 12
 
+# Re-mark open shadowed positions on the US side each tick, in step with the
+# international mark, so an eventual close compares two equally-fresh prices
+# (not a stale local mark vs a fresh US fetch). Safety cap on gateway load.
+_US_MARK_BUDGET_PER_TICK = 40
+
 # Estimated all-in Polymarket US trading cost, per share, round-trip. The
 # entry-price gap (measured, real) is the dominant drag; this fee is an estimate
 # on top of it so the US curve reflects a realistic, not optimistic, result.
@@ -216,18 +221,36 @@ class FollowEngine:
             return
         if us and us > 0:
             self.db.set_us_entry(position["id"], round(us, 4))
+            self.db.mark_us(position["id"], round(us, 4))  # seed the mark at entry
+
+    async def _shadow_mark(self, position: dict, trader_pos: dict) -> None:
+        """Refresh the US mark for an open shadowed position, alongside the
+        international mark, so the two exit prices are captured equally fresh."""
+        try:
+            us = await us_price(
+                self._us_client,
+                trader_pos.get("eventSlug", "") or position.get("event_slug", ""),
+                position["outcome"],
+                position["title"],
+            )
+        except Exception:  # noqa: BLE001
+            return
+        if us and us > 0:
+            self.db.mark_us(position["id"], round(us, 4))
 
     async def _shadow_close(self, pos: dict) -> None:
-        """Close the US shadow at the current US price. If US can't be priced now
-        (market already settled), fall back to the copy's own exit — the two
-        venues resolve to the same real-world outcome, so they converge there."""
+        """Close the US shadow at the LAST US mark — captured on the same cadence
+        as the international mark, so both exits are equally fresh (a fair close).
+        Falls back to a live fetch, then the copy's own exit, if never marked."""
         entry = pos.get("us_entry")
         if not entry:
             return
-        try:
-            us = await us_price(self._us_client, pos.get("event_slug", ""), pos["outcome"], pos["title"])
-        except Exception:  # noqa: BLE001
-            us = None
+        us = pos.get("us_cur")
+        if not us or us <= 0:
+            try:
+                us = await us_price(self._us_client, pos.get("event_slug", ""), pos["outcome"], pos["title"])
+            except Exception:  # noqa: BLE001
+                us = None
         if not us or us <= 0:
             us = pos["cur_price"]
         us_shares = pos["stake_usd"] / entry if entry > 0 else 0.0
@@ -270,6 +293,7 @@ class FollowEngine:
         fast_mode = ac.autopilot_enabled and ac.autopilot_rank == "churn"
         opened = closed = marked = errors = 0
         us_budget = _US_ENTRY_BUDGET_PER_TICK
+        us_mark_budget = _US_MARK_BUDGET_PER_TICK
 
         for wallet in wallets:
             follow = follows.get(wallet)
@@ -301,6 +325,10 @@ class FollowEngine:
                 if existing:
                     self.db.mark_position(existing["id"], float(p["curPrice"]))
                     marked += 1
+                    # Keep the US mark in step, so a later close is a fair compare.
+                    if existing.get("us_entry") and us_mark_budget > 0:
+                        us_mark_budget -= 1
+                        await self._shadow_mark(existing, p)
                     continue
 
                 # Only followed traders generate new copies.

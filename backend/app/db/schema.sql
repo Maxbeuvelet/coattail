@@ -36,7 +36,8 @@ CREATE TABLE IF NOT EXISTS positions (
   -- Null us_entry = no clean US match (excluded from the US curve).
   event_slug    TEXT,                -- league-team-team-date, for matching on US
   us_entry      REAL,                -- US fill price at open (same stake as the real copy)
-  us_exit       REAL,                -- US price at close
+  us_cur        REAL,                -- last US mark (same cadence as cur_price → fair exit)
+  us_exit       REAL,                -- US price at close (the last US mark)
   us_realized   REAL                 -- realized P&L had this been executed on US
 );
 CREATE INDEX IF NOT EXISTS idx_positions_open ON positions (status, wallet, asset);

@@ -36,6 +36,7 @@ class Database:
         for col, decl in (
             ("event_slug", "TEXT"),
             ("us_entry", "REAL"),
+            ("us_cur", "REAL"),
             ("us_exit", "REAL"),
             ("us_realized", "REAL"),
         ):
@@ -132,6 +133,11 @@ class Database:
     # ── US shadow book (comparison: same trades priced on Polymarket US) ──
     def set_us_entry(self, position_id: int, us_entry: float) -> None:
         self._exec("UPDATE positions SET us_entry = ? WHERE id = ?", (us_entry, position_id))
+
+    def mark_us(self, position_id: int, us_cur: float) -> None:
+        """Update the last US mark — kept in step with the international mark so
+        the eventual exit prices are equally fresh (a fair cross-venue close)."""
+        self._exec("UPDATE positions SET us_cur = ? WHERE id = ?", (us_cur, position_id))
 
     def set_us_exit(self, position_id: int, us_exit: float, us_realized: float) -> None:
         self._exec(
