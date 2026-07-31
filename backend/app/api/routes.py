@@ -293,12 +293,15 @@ def _us_row(p: dict) -> dict:
         pnl = round(shares * mark - stake - stake * US_FEE_RATE, 2)
         price = mark
         when = p.get("opened_at")
+    whale_entry = p.get("entry_price") or 0.0
     return {
         "id": p["id"],
         "title": p["title"],
         "outcome": p["outcome"],
         "stakeUsd": round(stake, 2),
-        "usEntry": entry,
+        "whaleEntry": round(whale_entry, 4),   # what the whale/international paid
+        "usEntry": round(entry, 4),            # what US would have cost
+        "gap": round(entry - whale_entry, 4),  # +US pricier, −US cheaper
         "usPrice": price,          # exit price (closed) or last mark (open)
         "pnl": pnl,
         "status": p["status"],

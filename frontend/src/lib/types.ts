@@ -161,7 +161,9 @@ export interface UsBookRow {
   title: string
   outcome: string
   stakeUsd: number
+  whaleEntry: number
   usEntry: number
+  gap: number
   usPrice: number | null
   pnl: number | null
   status: 'open' | 'closed'
