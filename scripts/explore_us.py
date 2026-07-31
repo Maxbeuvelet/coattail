@@ -1,10 +1,8 @@
-"""One-off explorer for the Polymarket US API — prints instrument + position
-shapes so we can design the market-mapping layer. Reads keys from .env at
-runtime (which is gitignored); no secrets are stored in this file.
-
-Run from the repo root:  python3 scripts/explore_us.py
+"""Explore / diagnose the Polymarket US API. Reads keys from .env at runtime
+(gitignored); no secrets stored here. Run from repo root:
+    python3 scripts/explore_us.py
 """
-import time, base64, json, urllib.request
+import time, base64, json, urllib.request, urllib.error
 from pathlib import Path
 from cryptography.hazmat.primitives.asymmetric import ed25519
 
@@ -29,16 +27,24 @@ def get(path):
             "X-PM-Timestamp": ts,
             "X-PM-Signature": sig,
             "Content-Type": "application/json",
+            "User-Agent": "coattail/1.0",
         },
     )
-    with urllib.request.urlopen(req, timeout=20) as r:
-        return json.load(r)
+    try:
+        with urllib.request.urlopen(req, timeout=20) as r:
+            return r.getcode(), r.read().decode(errors="replace")
+    except urllib.error.HTTPError as e:
+        return e.code, e.read().decode(errors="replace")
 
 
-print("=== INSTRUMENTS ===")
-print(json.dumps(get("/v1/refdata/instruments"), indent=1)[:2200])
-print("\n=== MY POSITIONS ===")
+for path in ["/v1/refdata/instruments", "/v1/portfolio/positions", "/v1/portfolio/balance"]:
+    code, body = get(path)
+    print(f"\n=== {path}  ->  HTTP {code} ===")
+    print(body[:800])
+
+# also: what does the US site think of this server's IP?
 try:
-    print(json.dumps(get("/v1/portfolio/positions"), indent=1)[:1500])
+    with urllib.request.urlopen("https://polymarket.us/api/geoblock", timeout=15) as r:
+        print("\n=== geoblock (this server's IP) ===\n" + r.read().decode()[:300])
 except Exception as e:
-    print("positions err:", e)
+    print("\ngeoblock check:", e)
