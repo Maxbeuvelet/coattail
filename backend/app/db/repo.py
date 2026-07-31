@@ -27,6 +27,20 @@ class Database:
         with self._lock:
             self._conn.executescript(_SCHEMA.read_text(encoding="utf-8"))
             self._conn.commit()
+        self._migrate()
+
+    def _migrate(self) -> None:
+        """Add columns introduced after a DB was first created (CREATE TABLE
+        IF NOT EXISTS won't touch an existing table). Safe to run every start."""
+        have = {r["name"] for r in self._rows("PRAGMA table_info(positions)")}
+        for col, decl in (
+            ("event_slug", "TEXT"),
+            ("us_entry", "REAL"),
+            ("us_exit", "REAL"),
+            ("us_realized", "REAL"),
+        ):
+            if col not in have:
+                self._exec(f"ALTER TABLE positions ADD COLUMN {col} {decl}")
 
     def close(self) -> None:
         with self._lock:
@@ -105,15 +119,57 @@ class Database:
         cur = self._exec(
             """INSERT INTO positions
                (wallet, name, asset, condition_id, title, outcome,
-                entry_price, shares, stake_usd, cur_price, status, opened_at)
-               VALUES (?,?,?,?,?,?,?,?,?,?, 'open', ?)""",
+                entry_price, shares, stake_usd, cur_price, status, opened_at, event_slug)
+               VALUES (?,?,?,?,?,?,?,?,?,?, 'open', ?, ?)""",
             (
                 p["wallet"], p["name"], p["asset"], p.get("condition_id"), p["title"],
                 p["outcome"], p["entry_price"], p["shares"], p["stake_usd"],
-                p["entry_price"], _now(),
+                p["entry_price"], _now(), p.get("event_slug"),
             ),
         )
         return int(cur.lastrowid)
+
+    # ── US shadow book (comparison: same trades priced on Polymarket US) ──
+    def set_us_entry(self, position_id: int, us_entry: float) -> None:
+        self._exec("UPDATE positions SET us_entry = ? WHERE id = ?", (us_entry, position_id))
+
+    def set_us_exit(self, position_id: int, us_exit: float, us_realized: float) -> None:
+        self._exec(
+            "UPDATE positions SET us_exit = ?, us_realized = ? WHERE id = ?",
+            (us_exit, us_realized, position_id),
+        )
+
+    def us_realized_series(self) -> list[dict]:
+        """Closed trades that had a US match, oldest-first — the US equity curve."""
+        return self._rows(
+            """SELECT closed_at, us_realized FROM positions
+               WHERE status = 'closed' AND us_entry IS NOT NULL
+                 AND us_exit IS NOT NULL AND closed_at IS NOT NULL
+               ORDER BY closed_at ASC"""
+        )
+
+    def us_performance(self) -> dict:
+        """US-shadow stats: how the same closed trades did at US prices, plus how
+        many of all trades (open+closed) we could actually match on US."""
+        realized = self._row(
+            """SELECT
+                 COUNT(*) AS n,
+                 COALESCE(SUM(us_realized), 0) AS total,
+                 COALESCE(SUM(realized_pnl), 0) AS own_total,  -- Coattail P&L on the SAME trades (fair head-to-head)
+                 COALESCE(SUM(CASE WHEN us_realized > 0 THEN 1 ELSE 0 END), 0) AS wins,
+                 COALESCE(SUM(CASE WHEN us_realized < 0 THEN 1 ELSE 0 END), 0) AS losses
+               FROM positions
+               WHERE status = 'closed' AND us_entry IS NOT NULL AND us_exit IS NOT NULL"""
+        ) or {}
+        coverage = self._row(
+            """SELECT
+                 COUNT(*) AS total,
+                 COALESCE(SUM(CASE WHEN us_entry IS NOT NULL THEN 1 ELSE 0 END), 0) AS matched
+               FROM positions"""
+        ) or {}
+        realized["matched"] = int(coverage.get("matched", 0) or 0)
+        realized["totalTrades"] = int(coverage.get("total", 0) or 0)
+        return realized
 
     def mark_position(self, position_id: int, cur_price: float) -> None:
         self._exec("UPDATE positions SET cur_price = ? WHERE id = ?", (cur_price, position_id))

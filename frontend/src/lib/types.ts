@@ -156,6 +156,19 @@ export interface EquityPoint {
   realized: number
 }
 
+export interface UsShadow {
+  closedCount: number
+  realizedTotal: number
+  ownRealizedMatched: number
+  wins: number
+  losses: number
+  winRate: number | null
+  matched: number
+  totalTrades: number
+  matchRate: number | null
+  equityCurve: EquityPoint[]
+}
+
 export interface Performance {
   closedCount: number
   wins: number
@@ -168,6 +181,7 @@ export interface Performance {
   profitFactor: number | null
   account: Account
   equityCurve: EquityPoint[]
+  usShadow?: UsShadow
 }
 
 export interface ActivityEntry {

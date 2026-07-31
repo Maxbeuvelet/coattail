@@ -109,6 +109,7 @@ class DataClient:
                 "curPrice": round(cur, 4),
                 "pnlPct": round(float(p.get("percentPnl", 0) or 0), 2),
                 "slug": p.get("slug", ""),
+                "eventSlug": p.get("eventSlug", ""),  # league-team-team-date; used to match on Polymarket US
                 "conditionId": p.get("conditionId", ""),
                 "asset": p.get("asset", ""),  # ERC1155 token id — needed to trade this outcome
                 "endDate": p.get("endDate", ""),  # when the market resolves (for Fast/churn mode)

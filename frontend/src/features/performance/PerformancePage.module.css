@@ -31,6 +31,45 @@
   color: var(--text-3);
   font-size: var(--fs-13);
 }
+.usPanel {
+  margin-top: var(--sp-4);
+  border-left: 2px solid var(--info);
+}
+/* head-to-head on the same matched trades */
+.compare {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-5);
+  margin-bottom: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+}
+.compareItem {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.compareLabel {
+  font-size: var(--fs-11);
+  color: var(--text-4);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.compareValue {
+  font-size: var(--fs-16);
+  font-weight: var(--fw-semibold);
+  color: var(--text-1);
+}
+.compareDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 6px;
+  vertical-align: middle;
+}
 .caveat {
   margin-top: var(--sp-4);
   padding: var(--sp-3) var(--sp-4);

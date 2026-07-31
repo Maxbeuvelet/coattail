@@ -13,12 +13,21 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timezone
 
+import httpx
+
 from app.db.repo import Database
 from app.polymarket.data_client import DataClient
+from app.polymarket.us_pricing import us_price
 from app.services.config_store import AutopilotView, ConfigStore, RiskView
 from app.services.executor import Executor
 
 log = logging.getLogger("copybot.engine")
+
+# The 'US shadow' book prices each copied trade on Polymarket US too, so its
+# equity curve can be compared against the (international-priced) real book.
+# Each US price lookup is a couple of gateway calls, so cap how many *new*
+# entries we price per tick to keep the hot path fast; exits are always priced.
+_US_ENTRY_BUDGET_PER_TICK = 12
 
 
 # The leaderboard churns slowly; re-selecting the auto-follow set every few
@@ -55,6 +64,10 @@ class FollowEngine:
         self.cfg = cfg
         self.executor = executor
         self._autopilot_last_run: datetime | None = None
+        # Public Polymarket US gateway (no auth for reads) for the shadow book.
+        self._us_client = httpx.AsyncClient(
+            timeout=15.0, headers={"User-Agent": "coattail/1.0"}
+        )
 
     # ── account math ─────────────────────────────────────────
     def account(self) -> dict:
@@ -181,6 +194,40 @@ class FollowEngine:
             return f"portfolio full ({r.max_open_positions} open)"
         return None
 
+    # ── US shadow book ───────────────────────────────────────
+    async def _shadow_open(self, position: dict, trader_pos: dict) -> None:
+        """Record what this trade would have cost on Polymarket US. Same stake as
+        the real copy; only the fill price differs. No match → not shadowed."""
+        try:
+            us = await us_price(
+                self._us_client,
+                trader_pos.get("eventSlug", ""),
+                position["outcome"],
+                position["title"],
+            )
+        except Exception as exc:  # noqa: BLE001
+            log.debug("US entry price lookup failed: %s", exc)
+            return
+        if us and us > 0:
+            self.db.set_us_entry(position["id"], round(us, 4))
+
+    async def _shadow_close(self, pos: dict) -> None:
+        """Close the US shadow at the current US price. If US can't be priced now
+        (market already settled), fall back to the copy's own exit — the two
+        venues resolve to the same real-world outcome, so they converge there."""
+        entry = pos.get("us_entry")
+        if not entry:
+            return
+        try:
+            us = await us_price(self._us_client, pos.get("event_slug", ""), pos["outcome"], pos["title"])
+        except Exception:  # noqa: BLE001
+            us = None
+        if not us or us <= 0:
+            us = pos["cur_price"]
+        us_shares = pos["stake_usd"] / entry if entry > 0 else 0.0
+        us_realized = round(us_shares * us - pos["stake_usd"], 2)
+        self.db.set_us_exit(pos["id"], round(us, 4), us_realized)
+
     # ── the tick ─────────────────────────────────────────────
     async def tick(self) -> dict:
         # Autopilot first: refresh the follow list to the current top-N, so the
@@ -215,6 +262,7 @@ class FollowEngine:
         # Fast mode only copies soon-resolving positions (quick turnover).
         fast_mode = ac.autopilot_enabled and ac.autopilot_rank == "churn"
         opened = closed = marked = errors = 0
+        us_budget = _US_ENTRY_BUDGET_PER_TICK
 
         for wallet in wallets:
             follow = follows.get(wallet)
@@ -234,6 +282,7 @@ class FollowEngine:
                 if pos["wallet"] == wallet and pos["asset"] not in current_assets:
                     self.executor.close_copy(self.db, pos, pos["cur_price"])
                     closed += 1
+                    await self._shadow_close(pos)
 
             # ── Entries / marks ──
             for p in trader_positions:
@@ -267,8 +316,11 @@ class FollowEngine:
                             self.db.log("skip", "insufficient cash", wallet=wallet, name=name,
                                         title=p["title"], outcome=p["outcome"])
                     else:
-                        self.executor.open_copy(self.db, p, name, stake)
+                        newpos = self.executor.open_copy(self.db, p, name, stake)
                         opened += 1
+                        if us_budget > 0:
+                            us_budget -= 1
+                            await self._shadow_open(newpos, p)
                 elif newly:
                     self.db.log("skip", reason, wallet=wallet, name=name,
                                 title=p["title"], outcome=p["outcome"])

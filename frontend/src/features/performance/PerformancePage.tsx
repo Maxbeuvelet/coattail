@@ -17,6 +17,7 @@ export function PerformancePage() {
 
   const hasClosed = (perf?.closedCount ?? 0) > 0
   const acct = perf?.account
+  const us = perf?.usShadow
 
   return (
     <Page>
@@ -72,6 +73,59 @@ export function PerformancePage() {
           />
         )}
       </div>
+
+      {/* ── US shadow: the same trades priced on Polymarket US (the venue you can
+            actually, legally trade). If this curve trails the one above, the
+            cross-venue price gap — not the picks — is where the edge dies. ── */}
+      {perf && (
+        <div className={`${styles.panel} ${styles.usPanel}`}>
+          <div className={styles.panelHead}>
+            <h2 className={styles.panelTitle}>
+              <span className={styles.compareDot} style={{ background: 'var(--info)' }} />
+              If executed on Polymarket US
+            </h2>
+            <span className={styles.panelHint}>same trades, real US prices — the honest cross-venue test</span>
+          </div>
+          {us && us.closedCount > 0 ? (
+            <>
+              <div className={styles.compare}>
+                <div className={styles.compareItem}>
+                  <span className={styles.compareLabel}>Coattail (international)</span>
+                  <Value value={us.ownRealizedMatched} className={styles.compareValue}>
+                    {signedUsd2(us.ownRealizedMatched)}
+                  </Value>
+                </div>
+                <div className={styles.compareItem}>
+                  <span className={styles.compareLabel}>Polymarket US</span>
+                  <Value value={us.realizedTotal} className={styles.compareValue}>
+                    {signedUsd2(us.realizedTotal)}
+                  </Value>
+                </div>
+                <div className={styles.compareItem}>
+                  <span className={styles.compareLabel}>Venue gap</span>
+                  <Value value={us.realizedTotal - us.ownRealizedMatched} className={styles.compareValue}>
+                    {signedUsd2(us.realizedTotal - us.ownRealizedMatched)}
+                  </Value>
+                </div>
+                <div className={styles.compareItem}>
+                  <span className={styles.compareLabel}>Matched on US</span>
+                  <span className={styles.compareValue}>
+                    {us.matched}/{us.totalTrades}
+                    {us.matchRate != null ? ` · ${ratioPct(us.matchRate)}` : ''}
+                  </span>
+                </div>
+              </div>
+              <EquityCurve points={us.equityCurve} baseline={perf.account.bankroll} accent="var(--info)" />
+            </>
+          ) : (
+            <EmptyState
+              icon="trending"
+              title="Building the US comparison"
+              detail="Every copied trade is also priced on Polymarket US as it opens and closes. This curve fills in as those matched trades close — then you can see, side by side, whether the same picks make money at the prices you could actually get."
+            />
+          )}
+        </div>
+      )}
 
       {hasClosed && perf && (
         <p className={styles.caveat}>

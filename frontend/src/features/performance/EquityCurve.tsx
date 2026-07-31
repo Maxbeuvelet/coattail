@@ -1,7 +1,7 @@
 /** Equity curve — cumulative realized equity per closed trade. Single series,
  *  colored by net result, with the starting-bankroll baseline and a hover
  *  readout. Hand-built SVG (no chart lib) for full control over the marks. */
-import { useMemo, useRef, useState } from 'react'
+import { useId, useMemo, useRef, useState } from 'react'
 import type { EquityPoint } from '@/lib/types'
 import { usd, signedUsd2 } from '@/lib/format'
 import styles from './EquityCurve.module.css'
@@ -13,11 +13,15 @@ const PAD = { l: 12, r: 14, t: 18, b: 24 }
 interface EquityCurveProps {
   points: EquityPoint[]
   baseline: number
+  /** Fixed line color. When set, overrides the win/loss (green/red) tinting —
+   *  used for the US shadow curve so the two series read as distinct. */
+  accent?: string
 }
 
-export function EquityCurve({ points, baseline }: EquityCurveProps) {
+export function EquityCurve({ points, baseline, accent }: EquityCurveProps) {
   const svgRef = useRef<SVGSVGElement>(null)
   const [hover, setHover] = useState<number | null>(null)
+  const fillId = useId()  // unique per instance, so stacked curves don't share a gradient
 
   const geo = useMemo(() => {
     const plotW = W - PAD.l - PAD.r
@@ -41,7 +45,7 @@ export function EquityCurve({ points, baseline }: EquityCurveProps) {
   const last = points[points.length - 1]
   const net = last.equity - baseline
   const up = net >= 0
-  const tone = up ? 'var(--pos)' : 'var(--neg)'
+  const tone = accent ?? (up ? 'var(--pos)' : 'var(--neg)')
 
   const onMove = (e: React.MouseEvent) => {
     const svg = svgRef.current
@@ -83,7 +87,7 @@ export function EquityCurve({ points, baseline }: EquityCurveProps) {
         aria-label="Equity curve over closed trades"
       >
         <defs>
-          <linearGradient id="eqFill" x1="0" y1="0" x2="0" y2="1">
+          <linearGradient id={fillId} x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor={tone} stopOpacity="0.16" />
             <stop offset="100%" stopColor={tone} stopOpacity="0" />
           </linearGradient>
@@ -101,7 +105,7 @@ export function EquityCurve({ points, baseline }: EquityCurveProps) {
           start · {usd(baseline)}
         </text>
 
-        <path d={geo.area} fill="url(#eqFill)" />
+        <path d={geo.area} fill={`url(#${fillId})`} />
         <path d={geo.line} fill="none" stroke={tone} strokeWidth={2} vectorEffect="non-scaling-stroke" />
 
         {/* hover crosshair + marker */}

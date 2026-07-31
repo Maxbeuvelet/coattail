@@ -31,7 +31,13 @@ CREATE TABLE IF NOT EXISTS positions (
   opened_at     TEXT NOT NULL,
   exit_price    REAL,
   closed_at     TEXT,
-  realized_pnl  REAL
+  realized_pnl  REAL,
+  -- "US shadow" comparison book: the same trade priced on Polymarket US.
+  -- Null us_entry = no clean US match (excluded from the US curve).
+  event_slug    TEXT,                -- league-team-team-date, for matching on US
+  us_entry      REAL,                -- US fill price at open (same stake as the real copy)
+  us_exit       REAL,                -- US price at close
+  us_realized   REAL                 -- realized P&L had this been executed on US
 );
 CREATE INDEX IF NOT EXISTS idx_positions_open ON positions (status, wallet, asset);
 

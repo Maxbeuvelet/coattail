@@ -298,6 +298,37 @@ async def performance(request: Request) -> dict:
             "realized": round(cum, 2),
         })
 
+    # ── US shadow book: the same trades, priced on Polymarket US ──
+    us = db.us_performance()
+    us_cum = 0.0
+    us_curve = [{"t": None, "equity": bankroll, "realized": 0.0}]
+    for row in db.us_realized_series():
+        us_cum += float(row["us_realized"] or 0)
+        us_curve.append({
+            "t": row["closed_at"],
+            "equity": round(bankroll + us_cum, 2),
+            "realized": round(us_cum, 2),
+        })
+    us_n = int(us.get("n", 0) or 0)
+    us_wins = int(us.get("wins", 0) or 0)
+    us_losses = int(us.get("losses", 0) or 0)
+    us_decided = us_wins + us_losses
+    us_total_trades = int(us.get("totalTrades", 0) or 0)
+    us_matched = int(us.get("matched", 0) or 0)
+    us_own_matched = round(float(us.get("own_total", 0) or 0), 2)  # Coattail P&L on the same trades
+    us_shadow = {
+        "closedCount": us_n,
+        "realizedTotal": round(float(us.get("total", 0) or 0), 2),
+        "ownRealizedMatched": us_own_matched,
+        "wins": us_wins,
+        "losses": us_losses,
+        "winRate": round(us_wins / us_decided, 4) if us_decided else None,
+        "matched": us_matched,          # trades we could price on US
+        "totalTrades": us_total_trades,  # all trades, matched or not
+        "matchRate": round(us_matched / us_total_trades, 4) if us_total_trades else None,
+        "equityCurve": us_curve,
+    }
+
     return {
         "closedCount": n,
         "wins": wins,
@@ -310,6 +341,7 @@ async def performance(request: Request) -> dict:
         "profitFactor": round(gross_win / gross_loss, 2) if gross_loss > 0 else None,
         "account": account,
         "equityCurve": curve,
+        "usShadow": us_shadow,
     }
 
 

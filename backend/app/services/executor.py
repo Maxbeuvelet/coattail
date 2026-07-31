@@ -38,6 +38,7 @@ class PaperExecutor(Executor):
             "condition_id": trader_pos.get("conditionId", ""),
             "title": trader_pos["title"],
             "outcome": trader_pos["outcome"],
+            "event_slug": trader_pos.get("eventSlug", ""),
             "entry_price": round(price, 4),
             "shares": shares,
             "stake_usd": round(stake_usd, 2),
