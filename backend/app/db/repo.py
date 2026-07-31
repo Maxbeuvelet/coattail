@@ -145,6 +145,16 @@ class Database:
             (us_exit, us_realized, position_id),
         )
 
+    def us_positions(self) -> list[dict]:
+        """Every trade that matched on Polymarket US (open + closed), open first,
+        newest first — for the standalone US book."""
+        return self._rows(
+            """SELECT * FROM positions
+               WHERE us_entry IS NOT NULL
+               ORDER BY (status = 'open') DESC,
+                        COALESCE(closed_at, opened_at) DESC"""
+        )
+
     def us_realized_series(self) -> list[dict]:
         """Closed trades that had a US match, oldest-first — the US equity curve."""
         return self._rows(

@@ -17,7 +17,7 @@ import httpx
 
 from app.db.repo import Database
 from app.polymarket.data_client import DataClient
-from app.polymarket.us_pricing import us_price
+from app.polymarket.us_pricing import US_FEE_PER_SHARE, us_price
 from app.services.config_store import AutopilotView, ConfigStore, RiskView
 from app.services.executor import Executor
 
@@ -34,11 +34,7 @@ _US_ENTRY_BUDGET_PER_TICK = 12
 # (not a stale local mark vs a fresh US fetch). Safety cap on gateway load.
 _US_MARK_BUDGET_PER_TICK = 40
 
-# Estimated all-in Polymarket US trading cost, per share, round-trip. The
-# entry-price gap (measured, real) is the dominant drag; this fee is an estimate
-# on top of it so the US curve reflects a realistic, not optimistic, result.
-# Tune when the real fee schedule is confirmed.
-_US_FEE_PER_SHARE = 0.02
+# US trading-cost estimate lives in us_pricing (shared with the US-book route).
 
 
 # The leaderboard churns slowly; re-selecting the auto-follow set every few
@@ -254,7 +250,7 @@ class FollowEngine:
         if not us or us <= 0:
             us = pos["cur_price"]
         us_shares = pos["stake_usd"] / entry if entry > 0 else 0.0
-        fee = us_shares * _US_FEE_PER_SHARE  # round-trip US trading cost (estimate)
+        fee = us_shares * US_FEE_PER_SHARE  # round-trip US trading cost (estimate)
         us_realized = round(us_shares * us - pos["stake_usd"] - fee, 2)
         self.db.set_us_exit(pos["id"], round(us, 4), us_realized)
 

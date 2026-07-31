@@ -14,6 +14,11 @@ import httpx
 
 GATEWAY = "https://gateway.polymarket.us"
 
+# Estimated all-in Polymarket US trading cost, per share, round-trip. The
+# entry-price gap (measured) is the dominant drag; this is an estimate on top so
+# the US book reflects a realistic result. Tune when the real schedule is known.
+US_FEE_PER_SHARE = 0.02
+
 # key = teamA-teamB-YYYY-MM-DD  (ignores the differing league prefix: chi vs csl)
 _KEY_RE = re.compile(r"-([a-z0-9]+)-([a-z0-9]+)-(\d{4}-\d{2}-\d{2})")
 _WORD_RE = re.compile(r"[A-Z][a-zA-Z]{3,}")

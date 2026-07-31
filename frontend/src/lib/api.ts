@@ -13,6 +13,7 @@ import type {
   Snapshot,
   TickSummary,
   Trader,
+  UsBook,
 } from './types'
 
 class ApiError extends Error {
@@ -107,6 +108,7 @@ export const api = {
     send<Follow>('PATCH', `/api/follows/${wallet}`, { allocationUsd }),
 
   book: () => get<Book>('/api/book'),
+  usBook: () => get<UsBook>('/api/us-book'),
   performance: () => get<Performance>('/api/performance'),
   activity: (limit = 100) => get<ActivityEntry[]>('/api/activity', { limit }),
   tickNow: () => send<TickSummary>('POST', '/api/engine/tick'),

@@ -19,6 +19,7 @@ export function Sidebar() {
     { to: '/discover', label: 'Discover', icon: 'compass' },
     { to: '/following', label: 'Following', icon: 'users', badge: count || undefined },
     { to: '/book', label: 'Book', icon: 'wallet' },
+    { to: '/us-book', label: 'US book', icon: 'trending' },
     { to: '/performance', label: 'Performance', icon: 'trending' },
     { to: '/activity', label: 'Activity', icon: 'activity' },
     { to: '/settings', label: 'Settings', icon: 'settings' },

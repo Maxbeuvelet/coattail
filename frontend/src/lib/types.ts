@@ -156,6 +156,29 @@ export interface EquityPoint {
   realized: number
 }
 
+export interface UsBookRow {
+  id: number
+  title: string
+  outcome: string
+  stakeUsd: number
+  usEntry: number
+  usPrice: number | null
+  pnl: number | null
+  status: 'open' | 'closed'
+  at: string | null
+}
+
+export interface UsBook {
+  open: UsBookRow[]
+  closed: UsBookRow[]
+  realized: number
+  unrealized: number
+  openCount: number
+  closedCount: number
+  equity: number
+  bankroll: number
+}
+
 export interface UsShadow {
   closedCount: number
   realizedTotal: number

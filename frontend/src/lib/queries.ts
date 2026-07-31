@@ -14,6 +14,7 @@ export const queryKeys = {
   status: ['status'] as const,
   snapshot: (top: number) => ['snapshot', top] as const,
   book: ['book'] as const,
+  usBook: ['us-book'] as const,
   performance: ['performance'] as const,
   activity: ['activity'] as const,
 }
@@ -30,6 +31,14 @@ export function useBook() {
   return useQuery({
     queryKey: queryKeys.book,
     queryFn: api.book,
+    refetchInterval: BOOK_REFETCH_MS,
+  })
+}
+
+export function useUsBook() {
+  return useQuery({
+    queryKey: queryKeys.usBook,
+    queryFn: api.usBook,
     refetchInterval: BOOK_REFETCH_MS,
   })
 }

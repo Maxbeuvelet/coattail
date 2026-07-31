@@ -9,6 +9,8 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
+from app.polymarket.us_pricing import US_FEE_PER_SHARE
+
 router = APIRouter(prefix="/api")
 
 
@@ -272,6 +274,58 @@ async def book(request: Request) -> dict:
         "account": engine.account(),
         "open": [_position_out(p) for p in db.open_positions()],
         "closed": [_position_out(p) for p in db.closed_positions(100)],
+    }
+
+
+def _us_row(p: dict) -> dict:
+    """One line of the US book: the bet, the stake, and the gain/loss — priced
+    on Polymarket US. Closed rows use realized P&L; open rows mark to the last
+    US price (same fee applied) so the number is comparable."""
+    stake = p["stake_usd"]
+    entry = p["us_entry"] or 0.0
+    shares = stake / entry if entry > 0 else 0.0
+    if p["status"] == "closed":
+        pnl = p.get("us_realized")
+        price = p.get("us_exit")
+        when = p.get("closed_at")
+    else:
+        mark = p.get("us_cur") or entry
+        pnl = round(shares * mark - stake - shares * US_FEE_PER_SHARE, 2)
+        price = mark
+        when = p.get("opened_at")
+    return {
+        "id": p["id"],
+        "title": p["title"],
+        "outcome": p["outcome"],
+        "stakeUsd": round(stake, 2),
+        "usEntry": entry,
+        "usPrice": price,          # exit price (closed) or last mark (open)
+        "pnl": pnl,
+        "status": p["status"],
+        "at": when,
+    }
+
+
+@router.get("/us-book")
+async def us_book(request: Request) -> dict:
+    """Standalone Polymarket US book: the same copied bets, priced on US. Simple
+    by design — what the bet was, how much was placed, what it made or lost."""
+    db = request.app.state.db
+    rows = [_us_row(p) for p in db.us_positions()]
+    open_rows = [r for r in rows if r["status"] == "open"]
+    closed_rows = [r for r in rows if r["status"] == "closed"]
+    realized = round(sum(r["pnl"] or 0 for r in closed_rows), 2)
+    unrealized = round(sum(r["pnl"] or 0 for r in open_rows), 2)
+    bankroll = request.app.state.engine.account()["bankroll"]
+    return {
+        "open": open_rows,
+        "closed": closed_rows,
+        "realized": realized,
+        "unrealized": unrealized,
+        "openCount": len(open_rows),
+        "closedCount": len(closed_rows),
+        "equity": round(bankroll + realized + unrealized, 2),
+        "bankroll": bankroll,
     }
 
 
