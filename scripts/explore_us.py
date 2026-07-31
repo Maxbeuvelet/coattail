@@ -1,5 +1,5 @@
-"""Scan the Polymarket US market list: categories + whether it carries the bot's
-whale teams. Signs path-only. Reads keys from .env (gitignored). Run from root."""
+"""Find CURRENTLY-OPEN Polymarket US markets and check soccer overlap.
+Signs path-only. Reads keys from .env (gitignored). Run from repo root."""
 import time, base64, json, urllib.request, urllib.error
 from pathlib import Path
 from cryptography.hazmat.primitives.asymmetric import ed25519
@@ -27,30 +27,27 @@ def get(path):
         with urllib.request.urlopen(req, timeout=25) as r:
             return json.loads(r.read().decode(errors="replace"))
     except urllib.error.HTTPError as e:
-        print("HTTP", e.code, e.read().decode(errors="replace")[:200]); return {}
+        return {"_err": e.code, "_body": e.read().decode(errors="replace")[:120]}
 
 
-questions, cats = [], {}
-cursor, pages = None, 0
-while pages < 30:
-    data = get(f"/v1/markets?limit=200" + (f"&cursor={cursor}" if cursor else ""))
+SOCCER = ["paok", "hammarby", "panathinaik", "auda", "tromso", "gent", "benfica",
+          "rijeka", "larnaca", "flora", "derry", "new saints", "cherkasy"]
+
+for q in [
+    "/v1/markets?closed=false&limit=200",
+    "/v1/markets?active=true&closed=false&limit=200",
+    "/v1/markets?limit=200&offset=2000",
+    "/v1/markets?status=open&limit=200",
+]:
+    data = get(q)
+    if "_err" in data:
+        print(f"\n{q}\n  HTTP {data['_err']} {data['_body']}"); continue
     ms = data.get("markets", [])
-    for m in ms:
-        questions.append(m.get("question", ""))
-        c = m.get("category", "?"); cats[c] = cats.get(c, 0) + 1
-    cursor = data.get("cursor") or data.get("nextCursor") or data.get("next")
-    pages += 1
-    if not ms or not cursor:
-        break
-
-print(f"scanned {len(questions)} markets across {pages} page(s)")
-print("top-level keys of last response:", list(data.keys()))
-print("categories:", cats)
-print("\n--- does US carry your whale teams? ---")
-for t in ["PAOK", "Hammarby", "Panathinaikos", "Auda", "Tromso", "Gent", "Benfica", "Rangers", "Chiefs", "soccer", "vs."]:
-    hits = [q for q in questions if t.lower() in q.lower()]
-    ex = (" e.g. " + hits[0]) if hits else ""
-    print(f"  '{t}': {len(hits)}{ex[:60]}")
-print("\n--- 20 sample market questions ---")
-for q in questions[:20]:
-    print("  •", q[:60])
+    soc = [m.get("question", "") for m in ms
+           if any(s in m.get("question", "").lower() for s in SOCCER)]
+    dates = sorted({m.get("endDate", "")[:10] for m in ms if m.get("endDate")})
+    print(f"\n{q}\n  {len(ms)} markets | endDate range: {dates[:1]}..{dates[-1:]}"
+          f" | SOCCER HITS: {len(soc)}")
+    if soc:
+        print("   ✓", soc[:4])
+    print("   sample:", [m.get("question", "")[:34] for m in ms[:5]])
