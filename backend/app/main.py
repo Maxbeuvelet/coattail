@@ -17,6 +17,7 @@ from app.api.routes import router as api_router
 from app.config import get_settings
 from app.db.repo import Database
 from app.polymarket.data_client import DataClient
+from app.polymarket.us_pricing import US_FEE_RATE
 from app.services.config_store import ConfigStore
 from app.services.engine import FollowEngine
 from app.services.executor import PaperExecutor
@@ -32,6 +33,12 @@ async def lifespan(app: FastAPI):
     app.state.settings = settings
     app.state.data_client = DataClient(settings.data_api)
     app.state.db = Database(settings.db_path)
+    # Rebook the US shadow's closed trades under the current fee model, so a fee
+    # change (e.g. the per-share → percent-of-notional fix) scrubs old values
+    # in place — no need to clear the book.
+    fixed = app.state.db.recompute_us_realized(US_FEE_RATE)
+    if fixed:
+        log.info("Recomputed US-shadow P&L on %d closed trades (fee=%.3f)", fixed, US_FEE_RATE)
     app.state.config_store = ConfigStore(app.state.db, settings)
 
     # Phase 2 always simulates; live execution (Phase 4) swaps the executor.

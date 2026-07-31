@@ -9,7 +9,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
-from app.polymarket.us_pricing import US_FEE_PER_SHARE
+from app.polymarket.us_pricing import US_FEE_RATE
 
 router = APIRouter(prefix="/api")
 
@@ -290,7 +290,7 @@ def _us_row(p: dict) -> dict:
         when = p.get("closed_at")
     else:
         mark = p.get("us_cur") or entry
-        pnl = round(shares * mark - stake - shares * US_FEE_PER_SHARE, 2)
+        pnl = round(shares * mark - stake - stake * US_FEE_RATE, 2)
         price = mark
         when = p.get("opened_at")
     return {

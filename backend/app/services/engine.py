@@ -17,7 +17,7 @@ import httpx
 
 from app.db.repo import Database
 from app.polymarket.data_client import DataClient
-from app.polymarket.us_pricing import US_FEE_PER_SHARE, us_price
+from app.polymarket.us_pricing import US_FEE_RATE, us_price
 from app.services.config_store import AutopilotView, ConfigStore, RiskView
 from app.services.executor import Executor
 
@@ -250,7 +250,7 @@ class FollowEngine:
         if not us or us <= 0:
             us = pos["cur_price"]
         us_shares = pos["stake_usd"] / entry if entry > 0 else 0.0
-        fee = us_shares * US_FEE_PER_SHARE  # round-trip US trading cost (estimate)
+        fee = pos["stake_usd"] * US_FEE_RATE  # round-trip US trading cost (estimate)
         us_realized = round(us_shares * us - pos["stake_usd"] - fee, 2)
         self.db.set_us_exit(pos["id"], round(us, 4), us_realized)
 

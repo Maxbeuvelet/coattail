@@ -134,6 +134,20 @@ class Database:
     def set_us_entry(self, position_id: int, us_entry: float) -> None:
         self._exec("UPDATE positions SET us_entry = ? WHERE id = ?", (us_entry, position_id))
 
+    def recompute_us_realized(self, fee_rate: float) -> int:
+        """Re-derive us_realized on every closed, US-matched trade from its stored
+        prices and the given fee model. Idempotent; fixes trades whose P&L was
+        booked under an old fee formula. Never touches the international book."""
+        cur = self._exec(
+            """UPDATE positions
+               SET us_realized = ROUND(stake_usd / us_entry * us_exit
+                                       - stake_usd - stake_usd * ?, 2)
+               WHERE status = 'closed' AND us_entry IS NOT NULL
+                 AND us_exit IS NOT NULL AND us_entry > 0""",
+            (fee_rate,),
+        )
+        return cur.rowcount
+
     def mark_us(self, position_id: int, us_cur: float) -> None:
         """Update the last US mark — kept in step with the international mark so
         the eventual exit prices are equally fresh (a fair cross-venue close)."""
