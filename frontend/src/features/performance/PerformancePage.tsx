@@ -121,7 +121,11 @@ export function PerformancePage() {
             <EmptyState
               icon="trending"
               title="Building the US comparison"
-              detail="Every copied trade is also priced on Polymarket US as it opens and closes. This curve fills in as those matched trades close — then you can see, side by side, whether the same picks make money at the prices you could actually get."
+              detail={
+                us.matched > 0
+                  ? `${us.matched} trade${us.matched === 1 ? '' : 's'} matched on Polymarket US so far, with a US price locked in — waiting for ${us.matched === 1 ? 'it' : 'them'} to close. The curve and head-to-head appear as those trades resolve (a few hours for the first, a couple days for a readable sample). Only trades opened since this went live are tracked.`
+                  : 'Every copied trade is also priced on Polymarket US as it opens and closes. This curve fills in as those matched trades close — then you can see, side by side, whether the same picks make money at the prices you could actually get. Only trades opened from now on are tracked.'
+              }
             />
           )}
         </div>
