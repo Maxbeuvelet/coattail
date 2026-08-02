@@ -129,7 +129,7 @@ def _same_team(a: frozenset[str], b: frozenset[str]) -> bool:
 # them costs little. Same for "Who will win …" markets, whose bid/ask belongs to
 # an unnamed side we can't identify from the question text.
 _UNSUPPORTED = re.compile(
-    r"halftime|half[- ]time|\bhalf\b|\bmap\s*\d|\bperiod\b|\bquarter\b|\bset\s*\d"
+    r"halftime|half[- ]time|\bhalf\b|\bperiod\b|\bquarter\b|\bset\s*\d"
     r"|first to score|first goal|corner|booking|\bcard\b|\bplayer\b|leading at",
     re.I,
 )
@@ -173,6 +173,13 @@ def _bets_international(title: str, outcome: str) -> list[tuple[tuple, bool]]:
     """Reduce a Coattail trade to the (proposition, affirm) pairs that express
     it. More than one when the same bet can be stated from either side — e.g.
     'Under 2.5' is both 'under 2.5 = Yes' and 'over 2.5 = No'."""
+    # Esports map winners: "CS: A vs BESTIA - Map 2 Winner", outcome = the team.
+    # Checked before _kind, which would read the trailing "Winner" as a moneyline.
+    mm = re.search(r"\bmap\s*(\d+)\b", title or "", re.I)
+    if mm and re.search(r"winner|\bwin\b", title or "", re.I):
+        team = _tokens(outcome)
+        return [(("map", int(mm.group(1)), team), True)] if team else []
+
     kind = _kind(title)
     if kind is None:
         return []
@@ -273,7 +280,127 @@ def _props_match(a: tuple, b: tuple) -> bool:
         return abs(a[2] - b[2]) < 1e-9 and _same_team(a[1], b[1])
     if kind == "ml":
         return _same_team(a[1], b[1])
+    if kind == "map":
+        return a[1] == b[1] and _same_team(a[2], b[2])
     return False
+
+
+# ── market metadata (preferred over parsing the question text) ──
+# Every US market carries `sportsMarketType` and a `marketSides` array whose
+# entries name the team the proposition is about. That is far more reliable than
+# regexing the question, and it identifies markets the text parser can't — e.g.
+# "Who will win …", where the question names no single side.
+_DENY_TYPE = re.compile(
+    r"_player_|inning|first_five|first_inning|extra_innings|first_half|second_half"
+    r"|_quarter|_period|map_rounds|map_total",
+    re.I,
+)
+
+
+def _kind_from_type(t: str) -> tuple[str, int | None] | str | None:
+    """Market kind from `sportsMarketType`.
+
+    Returns (kind, map_number) when supported, the string 'deny' when the type is
+    a scope we deliberately don't price (player props, part-innings, halves,
+    season futures), or None when the type is unknown — in which case the caller
+    falls back to parsing the question text.
+    """
+    if not t:
+        return None
+    if t == "futures" or _DENY_TYPE.search(t):
+        return "deny"
+    m = re.match(r"^esports_map_winner_(\d+)$", t)
+    if m:
+        return ("map", int(m.group(1)))
+    if "spread" in t or "handicap" in t:
+        return ("spr", None)
+    if "total" in t:
+        return ("tot", None)
+    if t.endswith("_winner"):
+        return ("ml", None)
+    return None
+
+
+def _team_tokens(team: dict | None) -> frozenset[str]:
+    """Tokens for a market's team, from its canonical name and safe name. The
+    `alias` nickname is skipped — it never appears in international titles and
+    would only add collision risk."""
+    if not team:
+        return frozenset()
+    out: set[str] = set()
+    for field in ("name", "safeName"):
+        v = team.get(field)
+        if v:
+            out |= _tokens(str(v))
+    return frozenset(out)
+
+
+def _line_from_identifier(ident: str) -> float | None:
+    """Totals encode their line in the side identifier, e.g. '…-f5-3pt5' → 3.5."""
+    m = re.search(r"(\d+)pt(\d+)", ident or "", re.I)
+    return float(f"{m.group(1)}.{m.group(2)}") if m else None
+
+
+def _market_offers(m: dict) -> list[tuple[tuple, bool]]:
+    """Propositions this market can express, as (proposition, yes_side_gives_it).
+
+    A market is one binary instrument, but a two-way market with a different team
+    on each side expresses the mirror proposition too — backing the Yankees is
+    buying No on "Cardinals win". Only emitted when the two sides genuinely name
+    different teams, so a Yes/No market (where both sides carry the same team,
+    and a draw is possible) never gets a bogus mirror.
+    """
+    kind = _kind_from_type(str(m.get("sportsMarketType") or ""))
+    if kind == "deny" or kind is None:
+        return []
+    kind_name, map_no = kind
+
+    sides = _loads(m.get("marketSides"))
+    long_side = next((s for s in sides if s.get("long")), None)
+    short_side = next((s for s in sides if not s.get("long")), None)
+    if long_side is None:
+        return []
+    ident = str(long_side.get("identifier") or "")
+    desc = str(long_side.get("description") or "")
+    long_team = _team_tokens(long_side.get("team"))
+    short_team = _team_tokens((short_side or {}).get("team"))
+
+    if kind_name == "ml":
+        # Soccer's draw leg shares the winner type; the identifier marks it.
+        if ident.endswith("-draw") or not long_team:
+            return [(("draw",), True)] if ident.endswith("-draw") else []
+        offers = [(("ml", long_team), True)]
+        if short_team and not _same_team(short_team, long_team):
+            offers.append((("ml", short_team), False))
+        return offers
+
+    if kind_name == "map":
+        return [(("map", map_no, long_team), True)] if long_team else []
+
+    if kind_name == "spr":
+        line = _num(desc)
+        if line is None or not long_team:
+            return []
+        offers = [(("spr", long_team, line), True)]
+        if short_team and not _same_team(short_team, long_team):
+            offers.append((("spr", short_team, -line), False))
+        return offers
+
+    if kind_name == "tot":
+        line = _line_from_identifier(ident)
+        if line is None:
+            line = _num(re.sub(r".*?(more than|over|under|total)", "", str(m.get("question") or ""), flags=re.I))
+        if line is None:
+            return []
+        side = "over" if desc.strip().lower().startswith("o") else (
+            "under" if desc.strip().lower().startswith("u") else None
+        )
+        if side is None:
+            return []
+        other = "under" if side == "over" else "over"
+        return [(("tot", line, side), True), (("tot", line, other), False)]
+
+    return []
 
 
 # ── quoting ──────────────────────────────────────────────────
@@ -349,23 +476,34 @@ def _strict_price(event: dict, outcome: str, title: str) -> tuple[float | None, 
     if not bets:
         return None, None
 
-    hits: list[tuple[float, str]] = []
+    hits: dict[str, float] = {}
     for m in event.get("markets", []):
-        prop = _prop_us(str(m.get("question") or ""))
-        if prop is None:
-            continue
-        for want, affirm in bets:
-            if _props_match(want, prop):
-                price = _cost(m, affirm)
-                if price is not None:
-                    hits.append((price, str(m.get("question") or "")))
-                break
+        question = str(m.get("question") or "")
+        # Prefer the market's own metadata; fall back to the question text only
+        # when `sportsMarketType` is absent or unrecognised (never when it names
+        # a scope we deliberately refuse).
+        offers = _market_offers(m)
+        if not offers:
+            if _kind_from_type(str(m.get("sportsMarketType") or "")) == "deny":
+                continue
+            prop = _prop_us(question)
+            offers = [(prop, True)] if prop is not None else []
 
-    # De-dup: the same question reached via two equivalent phrasings is one hit.
-    unique = {q: p for p, q in hits}
-    if len(unique) != 1:
+        for prop, yes_gives in offers:
+            # `want_true` is None when nothing matches — distinct from False,
+            # which means "we want this proposition to be false".
+            want_true = next((a for want, a in bets if _props_match(want, prop)), None)
+            if want_true is None:
+                continue
+            # Buying Yes yields `prop` == yes_gives; we want `prop` == want_true.
+            price = _cost(m, want_true == yes_gives)
+            if price is not None:
+                hits[question] = price
+            break  # one proposition per market
+
+    if len(hits) != 1:
         return None, None
-    question, price = next(iter(unique.items()))
+    question, price = next(iter(hits.items()))
     return price, question
 
 
