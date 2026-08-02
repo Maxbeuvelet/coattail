@@ -9,6 +9,7 @@ import { Value } from '@/components/ui/Value'
 import { usePerformance, useStatus } from '@/lib/queries'
 import { usd, signedUsd2, ratioPct } from '@/lib/format'
 import { EquityCurve } from './EquityCurve'
+import { UsShadowPanel } from './UsShadowPanel'
 import styles from './PerformancePage.module.css'
 
 export function PerformancePage() {
@@ -18,6 +19,7 @@ export function PerformancePage() {
   const hasClosed = (perf?.closedCount ?? 0) > 0
   const acct = perf?.account
   const us = perf?.usShadow
+  const usV2 = perf?.usShadowV2
 
   return (
     <Page>
@@ -76,59 +78,57 @@ export function PerformancePage() {
 
       {/* ── US shadow: the same trades priced on Polymarket US (the venue you can
             actually, legally trade). If this curve trails the one above, the
-            cross-venue price gap — not the picks — is where the edge dies. ── */}
+            cross-venue price gap — not the picks — is where the edge dies.
+            Two matchers run side by side; see us_pricing.py for why. ── */}
       {perf && us && (
-        <div className={`${styles.panel} ${styles.usPanel}`}>
-          <div className={styles.panelHead}>
-            <h2 className={styles.panelTitle}>
-              <span className={styles.compareDot} style={{ background: 'var(--info)' }} />
-              If executed on Polymarket US
-            </h2>
-            <span className={styles.panelHint}>same trades, real US prices + est. fee — the honest cross-venue test</span>
-          </div>
-          {us.closedCount > 0 ? (
+        <UsShadowPanel
+          shadow={us}
+          bankroll={perf.account.bankroll}
+          accent="var(--info)"
+          title="If executed on Polymarket US — legacy matcher"
+          hint="event-only match · superseded"
+          note={
             <>
-              <div className={styles.compare}>
-                <div className={styles.compareItem}>
-                  <span className={styles.compareLabel}>Coattail (international)</span>
-                  <Value value={us.ownRealizedMatched} className={styles.compareValue}>
-                    {signedUsd2(us.ownRealizedMatched)}
-                  </Value>
-                </div>
-                <div className={styles.compareItem}>
-                  <span className={styles.compareLabel}>Polymarket US</span>
-                  <Value value={us.realizedTotal} className={styles.compareValue}>
-                    {signedUsd2(us.realizedTotal)}
-                  </Value>
-                </div>
-                <div className={styles.compareItem}>
-                  <span className={styles.compareLabel}>Venue gap</span>
-                  <Value value={us.realizedTotal - us.ownRealizedMatched} className={styles.compareValue}>
-                    {signedUsd2(us.realizedTotal - us.ownRealizedMatched)}
-                  </Value>
-                </div>
-                <div className={styles.compareItem}>
-                  <span className={styles.compareLabel}>Matched on US</span>
-                  <span className={styles.compareValue}>
-                    {us.matched}/{us.totalTrades}
-                    {us.matchRate != null ? ` · ${ratioPct(us.matchRate)}` : ''}
-                  </span>
-                </div>
-              </div>
-              <EquityCurve points={us.equityCurve} baseline={perf.account.bankroll} accent="var(--info)" />
+              <strong>Do not trade on this curve.</strong> This matcher only matched the{' '}
+              <em>event</em>, then priced the first market in it — so a bet on “both teams to
+              score” could be priced off “team A wins”. It also read{' '}
+              <code>outcomePrices</code> as one price per outcome when it is really{' '}
+              <code>[bestBid, bestAsk]</code>. Kept running only as the baseline for the
+              corrected curve below.
             </>
-          ) : (
-            <EmptyState
-              icon="trending"
-              title="Building the US comparison"
-              detail={
-                us.matched > 0
-                  ? `${us.matched} trade${us.matched === 1 ? '' : 's'} matched on Polymarket US so far, with a US price locked in — waiting for ${us.matched === 1 ? 'it' : 'them'} to close. The curve and head-to-head appear as those trades resolve (a few hours for the first, a couple days for a readable sample). Only trades opened since this went live are tracked.`
-                  : 'Every copied trade is also priced on Polymarket US as it opens and closes. This curve fills in as those matched trades close — then you can see, side by side, whether the same picks make money at the prices you could actually get. Only trades opened from now on are tracked.'
-              }
-            />
-          )}
-        </div>
+          }
+          emptyDetail={
+            us.matched > 0
+              ? `${us.matched} trade${us.matched === 1 ? '' : 's'} matched so far — waiting for ${us.matched === 1 ? 'it' : 'them'} to close.`
+              : 'This is the original comparison curve. It fills in as matched trades close.'
+          }
+        />
+      )}
+
+      {/* ── The corrected shadow: matches the market, not just the game, and
+            prices Yes at the ask / No at 1−bid. This is the one to judge. ── */}
+      {perf && usV2 && (
+        <UsShadowPanel
+          shadow={usV2}
+          bankroll={perf.account.bankroll}
+          accent="var(--warn)"
+          title="If executed on Polymarket US — market-matched"
+          hint="same market, same outcome, real bid/ask + est. fee"
+          className={styles.v2Panel}
+          note={
+            <>
+              Matches the exact market <em>and</em> outcome, prices Yes at the ask and No at
+              1−bid, and refuses to guess — unmatched or ambiguous trades are skipped rather
+              than mispriced. Expect a lower match rate than the curve above, and treat that
+              as the honest one. Starts from the trades opened after this shipped.
+            </>
+          }
+          emptyDetail={
+            usV2.matched > 0
+              ? `${usV2.matched} trade${usV2.matched === 1 ? '' : 's'} matched with a confirmed market and a locked-in US price — waiting for ${usV2.matched === 1 ? 'it' : 'them'} to close. This curve and the head-to-head appear as they resolve.`
+              : 'Every new copied trade is priced against the exact matching Polymarket US market. This curve fills in as those trades close — then compare it against the legacy curve above to see how much of the old number was matching error.'
+          }
+        />
       )}
 
       {hasClosed && perf && (

@@ -39,6 +39,9 @@ async def lifespan(app: FastAPI):
     fixed = app.state.db.recompute_us_realized(US_FEE_RATE)
     if fixed:
         log.info("Recomputed US-shadow P&L on %d closed trades (fee=%.3f)", fixed, US_FEE_RATE)
+    fixed_v2 = app.state.db.recompute_us2_realized(US_FEE_RATE)
+    if fixed_v2:
+        log.info("Recomputed US-shadow-v2 P&L on %d closed trades (fee=%.3f)", fixed_v2, US_FEE_RATE)
     app.state.config_store = ConfigStore(app.state.db, settings)
 
     # Phase 2 always simulates; live execution (Phase 4) swaps the executor.

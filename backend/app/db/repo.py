@@ -39,6 +39,17 @@ class Database:
             ("us_cur", "REAL"),
             ("us_exit", "REAL"),
             ("us_realized", "REAL"),
+            # us2_* = the market-aware shadow. Kept alongside the original us_*
+            # columns (rather than replacing them) so the two matchers can be
+            # compared on the same trades going forward.
+            ("us2_entry", "REAL"),
+            ("us2_cur", "REAL"),
+            ("us2_exit", "REAL"),
+            ("us2_realized", "REAL"),
+            ("us2_market", "TEXT"),
+            # Set when a v2 lookup was attempted, matched or not — the honest
+            # denominator for the v2 match rate.
+            ("us2_seen", "INTEGER DEFAULT 0"),
         ):
             if col not in have:
                 self._exec(f"ALTER TABLE positions ADD COLUMN {col} {decl}")
@@ -199,6 +210,77 @@ class Database:
                  COUNT(*) AS total,
                  COALESCE(SUM(CASE WHEN us_entry IS NOT NULL THEN 1 ELSE 0 END), 0) AS matched
                FROM positions WHERE event_slug IS NOT NULL AND event_slug != ''"""
+        ) or {}
+        realized["matched"] = int(coverage.get("matched", 0) or 0)
+        realized["totalTrades"] = int(coverage.get("total", 0) or 0)
+        return realized
+
+    # ── US shadow v2 (same idea, market-aware matcher — see us_pricing) ──
+    def mark_us2_seen(self, position_id: int) -> None:
+        """Record that a v2 lookup ran for this trade, whether or not it matched."""
+        self._exec("UPDATE positions SET us2_seen = 1 WHERE id = ?", (position_id,))
+
+    def set_us2_entry(self, position_id: int, us2_entry: float, market: str | None) -> None:
+        self._exec(
+            "UPDATE positions SET us2_entry = ?, us2_market = ? WHERE id = ?",
+            (us2_entry, market, position_id),
+        )
+
+    def mark_us2(self, position_id: int, us2_cur: float) -> None:
+        self._exec("UPDATE positions SET us2_cur = ? WHERE id = ?", (us2_cur, position_id))
+
+    def set_us2_exit(self, position_id: int, us2_exit: float, us2_realized: float) -> None:
+        self._exec(
+            "UPDATE positions SET us2_exit = ?, us2_realized = ? WHERE id = ?",
+            (us2_exit, us2_realized, position_id),
+        )
+
+    def recompute_us2_realized(self, fee_rate: float) -> int:
+        cur = self._exec(
+            """UPDATE positions
+               SET us2_realized = ROUND(stake_usd / us2_entry * us2_exit
+                                        - stake_usd - stake_usd * ?, 2)
+               WHERE status = 'closed' AND us2_entry IS NOT NULL
+                 AND us2_exit IS NOT NULL AND us2_entry > 0""",
+            (fee_rate,),
+        )
+        return cur.rowcount
+
+    def us2_positions(self) -> list[dict]:
+        return self._rows(
+            """SELECT * FROM positions
+               WHERE us2_entry IS NOT NULL
+               ORDER BY (status = 'open') DESC,
+                        COALESCE(closed_at, opened_at) DESC"""
+        )
+
+    def us2_realized_series(self) -> list[dict]:
+        return self._rows(
+            """SELECT closed_at, us2_realized FROM positions
+               WHERE status = 'closed' AND us2_entry IS NOT NULL
+                 AND us2_exit IS NOT NULL AND closed_at IS NOT NULL
+               ORDER BY closed_at ASC"""
+        )
+
+    def us2_performance(self) -> dict:
+        realized = self._row(
+            """SELECT
+                 COUNT(*) AS n,
+                 COALESCE(SUM(us2_realized), 0) AS total,
+                 COALESCE(SUM(realized_pnl), 0) AS own_total,
+                 COALESCE(SUM(CASE WHEN us2_realized > 0 THEN 1 ELSE 0 END), 0) AS wins,
+                 COALESCE(SUM(CASE WHEN us2_realized < 0 THEN 1 ELSE 0 END), 0) AS losses
+               FROM positions
+               WHERE status = 'closed' AND us2_entry IS NOT NULL AND us2_exit IS NOT NULL"""
+        ) or {}
+        # Denominator = trades opened since the v2 matcher went live. Trades that
+        # predate it never had a v2 lookup, so counting them would understate the
+        # match rate. `us2_seen` marks a lookup was attempted.
+        coverage = self._row(
+            """SELECT
+                 COUNT(*) AS total,
+                 COALESCE(SUM(CASE WHEN us2_entry IS NOT NULL THEN 1 ELSE 0 END), 0) AS matched
+               FROM positions WHERE us2_seen = 1"""
         ) or {}
         realized["matched"] = int(coverage.get("matched", 0) or 0)
         realized["totalTrades"] = int(coverage.get("total", 0) or 0)

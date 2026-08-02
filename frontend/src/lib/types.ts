@@ -206,7 +206,10 @@ export interface Performance {
   profitFactor: number | null
   account: Account
   equityCurve: EquityPoint[]
+  /** Original event-only matcher. Known to mis-pair markets — kept for comparison. */
   usShadow?: UsShadow
+  /** Market-aware matcher with correct bid/ask pricing. The one to trust. */
+  usShadowV2?: UsShadow
 }
 
 export interface ActivityEntry {

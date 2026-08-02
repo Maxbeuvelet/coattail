@@ -35,6 +35,34 @@
   margin-top: var(--sp-4);
   border-left: 2px solid var(--info);
 }
+/* The corrected shadow sits directly under the legacy one it replaces. */
+.v2Panel {
+  margin-top: var(--sp-3);
+}
+/* Panel-level callout: why this curve is (or isn't) the one to read. */
+.note {
+  margin-bottom: var(--sp-3);
+  font-size: var(--fs-12);
+  color: var(--text-3);
+  line-height: 1.6;
+  max-width: 78ch;
+}
+.note strong {
+  color: var(--warn);
+  font-weight: var(--fw-semibold);
+}
+.note em {
+  font-style: italic;
+  color: var(--text-2);
+}
+.note code {
+  font-family: var(--font-mono);
+  font-size: var(--fs-11);
+  padding: 1px 4px;
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  color: var(--text-2);
+}
 /* head-to-head on the same matched trades */
 .compare {
   display: flex;

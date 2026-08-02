@@ -17,7 +17,7 @@ import httpx
 
 from app.db.repo import Database
 from app.polymarket.data_client import DataClient
-from app.polymarket.us_pricing import US_FEE_RATE, us_price
+from app.polymarket.us_pricing import US_FEE_RATE, us_quotes
 from app.services.config_store import AutopilotView, ConfigStore, RiskView
 from app.services.executor import Executor
 
@@ -204,9 +204,14 @@ class FollowEngine:
     # ── US shadow book ───────────────────────────────────────
     async def _shadow_open(self, position: dict, trader_pos: dict) -> None:
         """Record what this trade would have cost on Polymarket US. Same stake as
-        the real copy; only the fill price differs. No match → not shadowed."""
+        the real copy; only the fill price differs. No match → not shadowed.
+
+        Both matchers are priced off one fetch: the legacy (event-only) match
+        keeps the original curve running, the strict (market-aware) match feeds
+        the v2 curve, and because they share the fetch the two are directly
+        comparable at the same instant."""
         try:
-            us = await us_price(
+            q = await us_quotes(
                 self._us_client,
                 trader_pos.get("eventSlug", ""),
                 position["outcome"],
@@ -215,15 +220,19 @@ class FollowEngine:
         except Exception as exc:  # noqa: BLE001
             log.debug("US entry price lookup failed: %s", exc)
             return
-        if us and us > 0:
-            self.db.set_us_entry(position["id"], round(us, 4))
-            self.db.mark_us(position["id"], round(us, 4))  # seed the mark at entry
+        self.db.mark_us2_seen(position["id"])
+        if q.legacy and q.legacy > 0:
+            self.db.set_us_entry(position["id"], round(q.legacy, 4))
+            self.db.mark_us(position["id"], round(q.legacy, 4))  # seed the mark at entry
+        if q.strict and q.strict > 0:
+            self.db.set_us2_entry(position["id"], round(q.strict, 4), q.market)
+            self.db.mark_us2(position["id"], round(q.strict, 4))
 
     async def _shadow_mark(self, position: dict, trader_pos: dict) -> None:
-        """Refresh the US mark for an open shadowed position, alongside the
+        """Refresh the US marks for an open shadowed position, alongside the
         international mark, so the two exit prices are captured equally fresh."""
         try:
-            us = await us_price(
+            q = await us_quotes(
                 self._us_client,
                 trader_pos.get("eventSlug", "") or position.get("event_slug", ""),
                 position["outcome"],
@@ -231,28 +240,41 @@ class FollowEngine:
             )
         except Exception:  # noqa: BLE001
             return
-        if us and us > 0:
-            self.db.mark_us(position["id"], round(us, 4))
+        if q.legacy and q.legacy > 0:
+            self.db.mark_us(position["id"], round(q.legacy, 4))
+        if q.strict and q.strict > 0:
+            self.db.mark_us2(position["id"], round(q.strict, 4))
 
     async def _shadow_close(self, pos: dict) -> None:
-        """Close the US shadow at the LAST US mark — captured on the same cadence
-        as the international mark, so both exits are equally fresh (a fair close).
-        Falls back to a live fetch, then the copy's own exit, if never marked."""
-        entry = pos.get("us_entry")
-        if not entry:
+        """Close both US shadows at their LAST US mark — captured on the same
+        cadence as the international mark, so the exits are equally fresh (a fair
+        close). Falls back to a live fetch, then the copy's own exit, if never
+        marked."""
+        if not pos.get("us_entry") and not pos.get("us2_entry"):
             return
-        us = pos.get("us_cur")
-        if not us or us <= 0:
+        legacy_cur, strict_cur = pos.get("us_cur"), pos.get("us2_cur")
+        # One refetch covers whichever side is missing a mark.
+        if (pos.get("us_entry") and not legacy_cur) or (pos.get("us2_entry") and not strict_cur):
             try:
-                us = await us_price(self._us_client, pos.get("event_slug", ""), pos["outcome"], pos["title"])
+                q = await us_quotes(
+                    self._us_client, pos.get("event_slug", ""), pos["outcome"], pos["title"]
+                )
+                legacy_cur = legacy_cur or q.legacy
+                strict_cur = strict_cur or q.strict
             except Exception:  # noqa: BLE001
-                us = None
-        if not us or us <= 0:
-            us = pos["cur_price"]
-        us_shares = pos["stake_usd"] / entry if entry > 0 else 0.0
-        fee = pos["stake_usd"] * US_FEE_RATE  # round-trip US trading cost (estimate)
-        us_realized = round(us_shares * us - pos["stake_usd"] - fee, 2)
-        self.db.set_us_exit(pos["id"], round(us, 4), us_realized)
+                pass
+
+        stake = pos["stake_usd"]
+        fee = stake * US_FEE_RATE  # round-trip US trading cost (estimate)
+        for entry, cur, setter in (
+            (pos.get("us_entry"), legacy_cur, self.db.set_us_exit),
+            (pos.get("us2_entry"), strict_cur, self.db.set_us2_exit),
+        ):
+            if not entry or entry <= 0:
+                continue
+            exit_px = cur if cur and cur > 0 else pos["cur_price"]
+            realized = round(stake / entry * exit_px - stake - fee, 2)
+            setter(pos["id"], round(exit_px, 4), realized)
 
     # ── the tick ─────────────────────────────────────────────
     async def tick(self) -> dict:
@@ -322,7 +344,7 @@ class FollowEngine:
                     self.db.mark_position(existing["id"], float(p["curPrice"]))
                     marked += 1
                     # Keep the US mark in step, so a later close is a fair compare.
-                    if existing.get("us_entry") and us_mark_budget > 0:
+                    if (existing.get("us_entry") or existing.get("us2_entry")) and us_mark_budget > 0:
                         us_mark_budget -= 1
                         await self._shadow_mark(existing, p)
                     continue
