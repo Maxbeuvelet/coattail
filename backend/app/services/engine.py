@@ -97,8 +97,18 @@ class FollowEngine:
         }
 
     def _kill_active(self, r: RiskView) -> bool:
+        # 0 disables the switch. Without this guard the comparison below reads
+        # `realized_today <= 0`, which is true from the first tick of every day —
+        # so "no daily loss limit" would silently mean "never open anything".
+        if r.daily_loss_kill_pct <= 0:
+            return False
         midnight = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
         realized_today = self.db.realized_since(midnight.isoformat())
+        # NOTE: measured against bankroll_usd, which is the STARTING stake and
+        # does not grow with the book. With equity_pct sizing the book compounds
+        # while this threshold stays fixed, so the switch gets proportionally
+        # tighter every winning day. Scale bankroll_usd (or this pct) with equity
+        # if you re-enable it.
         return realized_today <= -abs(r.daily_loss_kill_pct) * r.bankroll_usd
 
     def _stake(self, follow: dict, cash: float, r: RiskView, equity: float) -> float:
