@@ -89,6 +89,9 @@ export interface TickSummary {
   marked?: number
   errors?: number
   killSwitch?: boolean
+  /** Today's max realized loss before entries stop (negative USD); null = disabled. */
+  killLimitUsd?: number | null
+  realizedToday?: number
   reason?: string
 }
 

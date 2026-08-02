@@ -96,20 +96,32 @@ class FollowEngine:
             "openCount": len(open_pos),
         }
 
-    def _kill_active(self, r: RiskView) -> bool:
-        # 0 disables the switch. Without this guard the comparison below reads
-        # `realized_today <= 0`, which is true from the first tick of every day —
-        # so "no daily loss limit" would silently mean "never open anything".
-        if r.daily_loss_kill_pct <= 0:
-            return False
+    def _kill_state(self, r: RiskView) -> tuple[bool, float, float | None]:
+        """Daily-loss circuit breaker: (active, realized_today, limit_usd).
+
+        The limit is a percentage of what the book was worth at the START of the
+        UTC day, not of the original bankroll. Current equity already has today's
+        closes baked in, so adding them back recovers the day-open value.
+
+        Sizing compounds off equity, so a limit pinned to the starting bankroll
+        gets proportionally tighter every winning day — at $100 bankroll and
+        $1,440 equity it fired at 0.7% of the book, stopping the engine on
+        ordinary days. Scaling it keeps the stop meaningful as the book grows.
+
+        `limit` is None when the switch is disabled (pct <= 0). Without that
+        guard the comparison reads `realized_today <= 0`, true from the first
+        tick of every day, so "no daily limit" would mean "never open anything".
+        """
         midnight = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
         realized_today = self.db.realized_since(midnight.isoformat())
-        # NOTE: measured against bankroll_usd, which is the STARTING stake and
-        # does not grow with the book. With equity_pct sizing the book compounds
-        # while this threshold stays fixed, so the switch gets proportionally
-        # tighter every winning day. Scale bankroll_usd (or this pct) with equity
-        # if you re-enable it.
-        return realized_today <= -abs(r.daily_loss_kill_pct) * r.bankroll_usd
+        if r.daily_loss_kill_pct <= 0:
+            return False, realized_today, None
+        day_start_equity = max(self.account()["equity"] - realized_today, 0.0)
+        limit = -abs(r.daily_loss_kill_pct) * day_start_equity
+        return realized_today <= limit, realized_today, round(limit, 2)
+
+    def _kill_active(self, r: RiskView) -> bool:
+        return self._kill_state(r)[0]
 
     def _stake(self, follow: dict, cash: float, r: RiskView, equity: float) -> float:
         if r.size_mode == "equity_pct":
@@ -317,6 +329,8 @@ class FollowEngine:
         # Paused (or the daily-loss kill) stops NEW entries but never blocks
         # marking or exiting positions we already hold.
         block_entries = r.engine_paused or self._kill_active(r)
+        # Recomputed after the pass for the summary, so the dashboard reflects
+        # the state the closes in this tick just produced.
         # Fast mode only copies soon-resolving positions (quick turnover).
         fast_mode = ac.autopilot_enabled and ac.autopilot_rank == "churn"
         opened = closed = marked = errors = 0
@@ -390,6 +404,7 @@ class FollowEngine:
 
                 self.db.mark_seen(wallet, asset)
 
+        kill_on_now, realized_today, kill_limit = self._kill_state(r)
         summary = {
             "status": "ok",
             "at": datetime.now(timezone.utc).isoformat(),
@@ -399,7 +414,11 @@ class FollowEngine:
             "marked": marked,
             "errors": errors,
             "paused": r.engine_paused,
-            "killSwitch": self._kill_active(r),
+            "killSwitch": kill_on_now,
+            # The live threshold in dollars (negative), so the limit is visible
+            # rather than implied by a percentage of an unstated base.
+            "killLimitUsd": kill_limit,
+            "realizedToday": round(realized_today, 2),
             "autopilot": autopilot,
         }
         if opened or closed:
