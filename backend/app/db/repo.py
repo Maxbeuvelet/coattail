@@ -247,6 +247,12 @@ class Database:
             (fill, fees, position_id),
         )
 
+    def open_position_by_live_slug(self, slug: str) -> dict | None:
+        """An open position already held in this Polymarket US market, if any."""
+        return self._row(
+            "SELECT * FROM positions WHERE status = 'open' AND live_slug = ?", (slug,)
+        )
+
     def live_fills(self, limit: int = 200) -> list[dict]:
         """Every live-executed trade, newest first — the slippage record."""
         return self._rows(

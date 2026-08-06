@@ -216,6 +216,13 @@ class LiveExecutor(Executor):
         if not slug or buy_yes is None:
             raise LiveOrderError("no confidently matched Polymarket US market — skipped")
 
+        # Defence in depth against buying the same US market twice. The engine
+        # already dedupes on (wallet, asset), but two different international
+        # titles can resolve to one US market, and any future bookkeeping gap
+        # must not translate into duplicate real orders.
+        if db.open_position_by_live_slug(slug):
+            raise LiveOrderError(f"already hold {slug} — not buying it twice")
+
         spend = min(float(stake_usd), self.max_usd_per_order)
         if spend < 1.0:
             raise LiveOrderError(f"stake ${spend:.2f} below the $1 minimum")
@@ -263,12 +270,19 @@ class LiveExecutor(Executor):
             "manualOrderIndicator": "MANUAL_ORDER_INDICATOR_AUTOMATIC",
         }
         resp = self._submit(params)
-        reason = self._reject_reason(resp)
-        if reason:
-            raise LiveOrderError(f"rejected: {reason}")
+        # Check FILLS FIRST. An IOC order that fills and then cancels its
+        # remainder returns both a fill execution and a cancel execution, and the
+        # cancel can carry a reject reason. Treating that as a rejection threw
+        # away real, already-settled fills — money spent with no position booked,
+        # which then let the next tick buy the same market again. Only a response
+        # with zero filled shares is a rejection.
         fill_price, shares, fees = self._fill(resp)
         if shares <= 0 or fill_price <= 0:
-            raise LiveOrderError("order returned no fill (no liquidity at tolerance)")
+            reason = self._reject_reason(resp) or "no fill (no liquidity at limit)"
+            raise LiveOrderError(f"rejected: {reason}")
+        if (reason := self._reject_reason(resp)):
+            # Partial fill: we own what filled, the rest was cancelled. Book it.
+            log.warning("partial fill on %s (%s) — booking %g shares", slug, reason, shares)
 
         position = {
             "wallet": trader_pos["_wallet"],
