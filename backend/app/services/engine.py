@@ -224,6 +224,24 @@ class FollowEngine:
         return None
 
     # ── US shadow book ───────────────────────────────────────
+    async def _resolve_us_market(self, trader_pos: dict) -> dict | None:
+        """Which Polymarket US market and side would express this trade, and at
+        what price? Returns None when the matcher isn't confident — the same
+        strictness the shadow book uses, now gating real money."""
+        try:
+            q = await us_quotes(
+                self._us_client,
+                trader_pos.get("eventSlug", ""),
+                trader_pos["outcome"],
+                trader_pos["title"],
+            )
+        except Exception as exc:  # noqa: BLE001
+            log.debug("US market resolve failed: %s", exc)
+            return None
+        if not q.slug or q.buy_yes is None or not q.strict:
+            return None
+        return {"slug": q.slug, "buy_yes": q.buy_yes, "price": q.strict, "market": q.market}
+
     async def _shadow_open(self, position: dict, trader_pos: dict) -> None:
         """Record what this trade would have cost on Polymarket US. Same stake as
         the real copy; only the fill price differs. No match → not shadowed.
@@ -393,7 +411,30 @@ class FollowEngine:
                             self.db.log("skip", "insufficient cash", wallet=wallet, name=name,
                                         title=p["title"], outcome=p["outcome"])
                     else:
-                        newpos = self.executor.open_copy(self.db, p, name, stake)
+                        # Live venues can only copy a trade whose Polymarket US
+                        # market we can identify with confidence. Resolve it
+                        # first and skip cleanly when there is no match, rather
+                        # than opening a position we cannot actually hold.
+                        if getattr(self.executor, "needs_us_market", False):
+                            p["_us"] = await self._resolve_us_market(p)
+                            if not p["_us"]:
+                                if newly:
+                                    self.db.log(
+                                        "skip", "no matching Polymarket US market",
+                                        wallet=wallet, name=name,
+                                        title=p["title"], outcome=p["outcome"],
+                                    )
+                                self.db.mark_seen(wallet, asset)
+                                continue
+                        try:
+                            newpos = self.executor.open_copy(self.db, p, name, stake)
+                        except Exception as exc:  # noqa: BLE001
+                            errors += 1
+                            log.warning("open failed (%s): %s", p.get("title", "")[:48], exc)
+                            self.db.log("skip", f"order failed: {exc}", wallet=wallet,
+                                        name=name, title=p["title"], outcome=p["outcome"])
+                            self.db.mark_seen(wallet, asset)
+                            continue
                         opened += 1
                         if us_budget > 0:
                             us_budget -= 1

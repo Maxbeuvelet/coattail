@@ -50,6 +50,18 @@ class Database:
             # Set when a v2 lookup was attempted, matched or not — the honest
             # denominator for the v2 match rate.
             ("us2_seen", "INTEGER DEFAULT 0"),
+            # ── live execution (Polymarket US) ──
+            # live_predicted vs live_fill is THE measurement a live test buys:
+            # how far real fills land from the price the shadow book expected.
+            ("live_order_id", "TEXT"),
+            ("live_slug", "TEXT"),
+            ("live_side", "TEXT"),
+            ("live_predicted", "REAL"),
+            ("live_fill", "REAL"),
+            ("live_shares", "REAL"),
+            ("live_fees", "REAL"),
+            ("live_exit_fill", "REAL"),
+            ("live_exit_fees", "REAL"),
         ):
             if col not in have:
                 self._exec(f"ALTER TABLE positions ADD COLUMN {col} {decl}")
@@ -214,6 +226,35 @@ class Database:
         realized["matched"] = int(coverage.get("matched", 0) or 0)
         realized["totalTrades"] = int(coverage.get("total", 0) or 0)
         return realized
+
+    # ── live execution bookkeeping ───────────────────────────
+    def record_live_fill(
+        self, position_id: int, *, order_id: str, slug: str, predicted: float | None,
+        actual: float, shares: float, fees: float, side: str,
+    ) -> None:
+        """Store the real fill next to the price the shadow book predicted."""
+        self._exec(
+            """UPDATE positions
+               SET live_order_id = ?, live_slug = ?, live_side = ?, live_predicted = ?,
+                   live_fill = ?, live_shares = ?, live_fees = ?
+               WHERE id = ?""",
+            (order_id, slug, side, predicted, actual, shares, fees, position_id),
+        )
+
+    def record_live_exit(self, position_id: int, fill: float, fees: float) -> None:
+        self._exec(
+            "UPDATE positions SET live_exit_fill = ?, live_exit_fees = ? WHERE id = ?",
+            (fill, fees, position_id),
+        )
+
+    def live_fills(self, limit: int = 200) -> list[dict]:
+        """Every live-executed trade, newest first — the slippage record."""
+        return self._rows(
+            """SELECT * FROM positions
+               WHERE live_order_id IS NOT NULL
+               ORDER BY opened_at DESC LIMIT ?""",
+            (limit,),
+        )
 
     # ── US shadow v2 (same idea, market-aware matcher — see us_pricing) ──
     def mark_us2_seen(self, position_id: int) -> None:

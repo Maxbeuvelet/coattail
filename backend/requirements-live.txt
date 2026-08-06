@@ -1,3 +1,14 @@
-# Live-trading extras (Phase 4 only). Install on top of requirements.txt when
-# wiring real CLOB execution:  pip install -r requirements-live.txt
-py-clob-client==0.19.0
+# Live-trading extras. Install on top of requirements.txt:
+#   pip install -r backend/requirements-live.txt
+#
+# Polymarket US is the venue a US trader can actually use, and the one the US
+# shadow book measures. Orders go to https://api.polymarket.us with Ed25519
+# request signing, handled inside the SDK.
+#
+# Credentials come from polymarket.us/developer (identity verification in the
+# app is required first) and are set as POLYMARKET_KEY_ID / POLYMARKET_SECRET_KEY.
+polymarket-us==0.1.2
+
+# NOTE: py-clob-client targets the INTERNATIONAL book (clob.polymarket.com),
+# which is a different venue from Polymarket US and is not what this bot trades.
+# Left out deliberately.

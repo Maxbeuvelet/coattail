@@ -20,7 +20,7 @@ from app.polymarket.data_client import DataClient
 from app.polymarket.us_pricing import US_FEE_RATE
 from app.services.config_store import ConfigStore
 from app.services.engine import FollowEngine
-from app.services.executor import PaperExecutor
+from app.services.executor import LiveExecutor, PaperExecutor
 from app.services.scheduler import EngineScheduler
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -44,17 +44,37 @@ async def lifespan(app: FastAPI):
         log.info("Recomputed US-shadow-v2 P&L on %d closed trades (fee=%.3f)", fixed_v2, US_FEE_RATE)
     app.state.config_store = ConfigStore(app.state.db, settings)
 
-    # Phase 2 always simulates; live execution (Phase 4) swaps the executor.
-    executor = PaperExecutor()
+    # Paper by default. Live execution requires LIVE_TRADING *and* working
+    # Polymarket US credentials; if the executor cannot be built we fall back to
+    # paper rather than starting up in a half-armed state.
+    executor: PaperExecutor | LiveExecutor = PaperExecutor()
+    if settings.live_trading:
+        try:
+            executor = LiveExecutor(
+                settings.polymarket_key_id,
+                settings.polymarket_secret_key,
+                max_usd_per_order=settings.live_max_usd_per_order,
+                slippage_bips=settings.live_slippage_bips,
+                dry_run=settings.live_dry_run,
+            )
+            log.warning(
+                "LIVE execution armed — Polymarket US, max $%.2f/order, %d bips slippage%s",
+                settings.live_max_usd_per_order,
+                settings.live_slippage_bips,
+                ", DRY RUN (orders previewed, not sent)" if settings.live_dry_run else "",
+            )
+        except Exception as exc:  # noqa: BLE001
+            log.error("LIVE_TRADING is on but the live executor could not start: %s", exc)
+            log.error("Falling back to PAPER. No real orders will be placed.")
+            executor = PaperExecutor()
+
     app.state.engine = FollowEngine(
         app.state.db, app.state.data_client, app.state.config_store, executor
     )
     app.state.scheduler = EngineScheduler(app.state.engine, settings.engine_interval_seconds)
 
-    mode = "LIVE 🔴" if settings.live_trading else "PAPER 🟢"
+    mode = "LIVE 🔴" if executor.mode.startswith("LIVE") else "PAPER 🟢"
     log.warning("Copy-trade backend starting in %s mode (executor=%s)", mode, executor.mode)
-    if settings.live_trading and not settings.polygon_private_key:
-        log.error("LIVE_TRADING is on but no POLYGON_PRIVATE_KEY set — trades will fail.")
 
     app.state.scheduler.start()
     try:

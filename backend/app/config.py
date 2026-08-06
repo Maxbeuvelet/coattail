@@ -21,7 +21,25 @@ class Settings(BaseSettings):
     # present this key (header X-Owner-Key). Empty = no restriction (local dev).
     owner_key: str = ""
 
-    # ── Wallet / CLOB creds (only used when live) ────────────
+    # ── Polymarket US API creds (used when live_trading) ─────
+    # Created at polymarket.us/developer after identity verification in the app.
+    # The secret is shown once; it never leaves the backend.
+    polymarket_key_id: str = ""
+    polymarket_secret_key: str = ""
+
+    # Hard ceiling on a single live order, in dollars. Enforced inside the
+    # executor, so a sizing bug upstream still cannot spend more than this.
+    live_max_usd_per_order: float = 5.0
+
+    # Slippage tolerance sent with each market order, in basis points.
+    live_slippage_bips: int = 200
+
+    # When true, live orders go through the SDK's `preview` endpoint instead of
+    # being submitted. Exercises the whole path without risking money — leave it
+    # on for the first run.
+    live_dry_run: bool = True
+
+    # ── Wallet / CLOB creds (international book — unused by US) ──
     polygon_private_key: str = ""
     clob_api_key: str = ""
     clob_api_secret: str = ""

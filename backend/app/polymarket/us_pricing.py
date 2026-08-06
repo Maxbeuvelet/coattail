@@ -51,15 +51,40 @@ import httpx
 
 GATEWAY = "https://gateway.polymarket.us"
 
-# Estimated all-in Polymarket US trading cost as a fraction of the dollars
-# staked, round-trip. A percent-of-notional model (not per-share) so it doesn't
-# balloon on cheap longshot bets.
+# Polymarket US publishes a symmetric, uncertainty-weighted fee:
 #
-# CAVEAT: live markets report `feeCoefficient: 0.06`. If that is 6% of notional
-# this is a 6x underestimate. Its formula isn't published on the gateway, so
-# rather than guess we keep the conservative estimate and expose the observed
-# coefficient (see UsQuote.fee_coefficient) for calibration later.
+#     fee = THETA * contracts * p * (1 - p)          (docs.polymarket.us/fees)
+#
+# with THETA = 0.06 for takers and -0.0125 for makers (a rebate). We cross the
+# spread on every copy, so we are always the taker.
+#
+# Expressed against the dollars staked, an ENTRY costs:
+#     contracts = stake / p        ->  fee = 0.06 * stake * (1 - p)
+# i.e. 6% of stake at p=0.01, 3% at p=0.50, 0.6% at p=0.90. Fees are largest on
+# coin-flips and smallest on near-certainties — the opposite of the flat 1% this
+# module assumed before, which understated the cost roughly 3x at typical prices.
+US_TAKER_THETA = 0.06
+
+# Retained only so older callers keep working; the flat model is not used for
+# new P&L. See us_fee() for the real one.
 US_FEE_RATE = 0.01
+
+
+def us_fee(stake_usd: float, entry_price: float, exit_price: float | None = None) -> float:
+    """Round-trip taker fee in dollars for a position of `stake_usd` opened at
+    `entry_price` and (optionally) closed at `exit_price`.
+
+    Contracts are fixed at entry, so the exit leg is charged on the same
+    contract count at the exit price. A position left to settle rather than
+    traded out pays no exit fee — pass exit_price=None for that case.
+    """
+    if entry_price <= 0:
+        return 0.0
+    contracts = stake_usd / entry_price
+    fee = US_TAKER_THETA * contracts * entry_price * (1.0 - entry_price)
+    if exit_price is not None and 0.0 < exit_price < 1.0:
+        fee += US_TAKER_THETA * contracts * exit_price * (1.0 - exit_price)
+    return round(fee, 4)
 
 # key = teamA-teamB-YYYY-MM-DD  (ignores the differing league prefix: chi vs csl)
 _KEY_RE = re.compile(r"-([a-z0-9]+)-([a-z0-9]+)-(\d{4}-\d{2}-\d{2})")
@@ -448,6 +473,12 @@ class UsQuote:
     strict: float | None = None      # market-aware match, correctly priced
     market: str | None = None        # the US question `strict` actually priced
     fee_coefficient: float | None = None  # venue-reported fee param, for calibration
+    # Everything needed to actually place this trade on Polymarket US. `slug`
+    # identifies the market to the orders API; `buy_yes` says which side of it
+    # to take. Populated only when `strict` matched — we never trade a market we
+    # could not confidently identify.
+    slug: str | None = None
+    buy_yes: bool | None = None
 
 
 async def _find_event(client: httpx.AsyncClient, event_slug: str, title: str) -> dict | None:
@@ -491,15 +522,16 @@ def _legacy_price(event: dict, outcome: str) -> float | None:
     return None
 
 
-def _strict_price(event: dict, outcome: str, title: str) -> tuple[float | None, str | None]:
-    """Market-aware match. Returns (cost, matched_question), or (None, None)
-    when nothing in the event asserts what this trade asserts — including when
-    two markets both do, since an ambiguous match is not a match."""
+def _strict_match(event: dict, outcome: str, title: str) -> dict | None:
+    """Market-aware match. Returns {price, question, slug, buy_yes} — everything
+    needed to price the trade AND to place it — or None when nothing in the
+    event asserts what this trade asserts, including when two markets both do,
+    since an ambiguous match is not a match."""
     bets = _bets_international(title, outcome)
     if not bets:
-        return None, None
+        return None
 
-    hits: dict[str, float] = {}
+    hits: dict[str, dict] = {}
     for m in event.get("markets", []):
         question = str(m.get("question") or "")
         # Prefer the market's own metadata; fall back to the question text only
@@ -519,15 +551,26 @@ def _strict_price(event: dict, outcome: str, title: str) -> tuple[float | None, 
             if want_true is None:
                 continue
             # Buying Yes yields `prop` == yes_gives; we want `prop` == want_true.
-            price = _cost(m, want_true == yes_gives)
+            buy_yes = want_true == yes_gives
+            price = _cost(m, buy_yes)
             if price is not None:
-                hits[question] = price
+                hits[question] = {
+                    "price": price,
+                    "question": question,
+                    "slug": str(m.get("slug") or "") or None,
+                    "buy_yes": buy_yes,
+                }
             break  # one proposition per market
 
     if len(hits) != 1:
-        return None, None
-    question, price = next(iter(hits.items()))
-    return price, question
+        return None
+    return next(iter(hits.values()))
+
+
+def _strict_price(event: dict, outcome: str, title: str) -> tuple[float | None, str | None]:
+    """Back-compat wrapper used by the shadow book and tests."""
+    hit = _strict_match(event, outcome, title)
+    return (hit["price"], hit["question"]) if hit else (None, None)
 
 
 async def us_quotes(
@@ -537,14 +580,20 @@ async def us_quotes(
     event = await _find_event(client, event_slug, title)
     if not event:
         return UsQuote()
-    strict, market = _strict_price(event, outcome, title)
+    hit = _strict_match(event, outcome, title)
     fee = None
-    for m in event.get("markets", []):
-        if str(m.get("question") or "") == market:
-            fee = _num(m.get("feeCoefficient"))
-            break
+    if hit:
+        for m in event.get("markets", []):
+            if str(m.get("question") or "") == hit["question"]:
+                fee = _num(m.get("feeCoefficient"))
+                break
     return UsQuote(
-        legacy=_legacy_price(event, outcome), strict=strict, market=market, fee_coefficient=fee
+        legacy=_legacy_price(event, outcome),
+        strict=hit["price"] if hit else None,
+        market=hit["question"] if hit else None,
+        slug=hit["slug"] if hit else None,
+        buy_yes=hit["buy_yes"] if hit else None,
+        fee_coefficient=fee,
     )
 
 
