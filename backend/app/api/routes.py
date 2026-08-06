@@ -70,10 +70,20 @@ async def status(request: Request) -> dict:
     sched = request.app.state.scheduler
     store = request.app.state.config_store
     r = store.risk()
+    # Report the executor that is actually installed, not what was requested.
+    # LIVE_TRADING=true with bad credentials falls back to paper, and saying
+    # "LIVE" there would be exactly the wrong answer to "am I armed?".
+    ex = request.app.state.engine.executor
+    mode = ex.mode                      # PAPER | LIVE | LIVE-DRYRUN
+    placing_orders = mode == "LIVE"     # dry run previews, it does not trade
     return {
-        "liveTrading": s.live_trading,
-        "mode": "LIVE" if s.live_trading else "PAPER",
-        "walletConfigured": bool(s.polygon_private_key) if s.live_trading else False,
+        "liveTrading": placing_orders,
+        "mode": mode,
+        # What the config asked for — differs from `mode` when arming failed.
+        "configuredLive": s.live_trading,
+        "dryRun": mode == "LIVE-DRYRUN",
+        "maxUsdPerOrder": s.live_max_usd_per_order if mode.startswith("LIVE") else None,
+        "walletConfigured": bool(s.polymarket_key_id and s.polymarket_secret_key),
         "engine": {
             "intervalSeconds": s.engine_interval_seconds,
             "lastTick": sched.last_summary,

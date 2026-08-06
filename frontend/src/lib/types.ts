@@ -96,8 +96,14 @@ export interface TickSummary {
 }
 
 export interface BotStatus {
+  /** True only when orders are really being placed (dry run does not count). */
   liveTrading: boolean
-  mode: 'PAPER' | 'LIVE'
+  /** The executor actually installed — not what the config asked for. */
+  mode: 'PAPER' | 'LIVE' | 'LIVE-DRYRUN'
+  /** What LIVE_TRADING requested; differs from `mode` when arming failed. */
+  configuredLive?: boolean
+  dryRun?: boolean
+  maxUsdPerOrder?: number | null
   walletConfigured: boolean
   engine: {
     intervalSeconds: number
