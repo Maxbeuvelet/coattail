@@ -63,8 +63,11 @@ US_FEE_RATE = 0.01
 
 # key = teamA-teamB-YYYY-MM-DD  (ignores the differing league prefix: chi vs csl)
 _KEY_RE = re.compile(r"-([a-z0-9]+)-([a-z0-9]+)-(\d{4}-\d{2}-\d{2})")
-_WORD_RE = re.compile(r"[A-Z][a-zA-Z]{3,}")
-_STOP = {"Will", "Half", "Over", "Under", "Spread", "Handicap"}
+_WORD_RE = re.compile(r"[A-Z][a-zA-Z]{2,}")
+_STOP = {
+    "Will", "Half", "Over", "Under", "Spread", "Handicap", "Exact", "Score",
+    "Both", "Teams", "Map", "Winner", "Game", "Match", "The", "Yes", "Total",
+}
 
 
 def _key(slug: str | None) -> str | None:
@@ -85,8 +88,14 @@ def _loads(s) -> list:
 # Club suffixes/prefixes differ across venues ("St Mirren FC" vs "St. Mirren"),
 # so they carry no signal and are dropped.
 _CLUB_NOISE = {
+    # Generic club prefixes/suffixes. These MUST be dropped, not merely demoted:
+    # "CA Unión" and "CA Lanús" share "ca", and treating that as a real token
+    # made both teams' markets match, which the ambiguity check then threw away.
     "fc", "sc", "cd", "cf", "afc", "ac", "as", "sk", "bk", "ss", "cs", "rc",
-    "sv", "vfl", "vfb", "if", "ik", "club", "the", "de", "of", "and",
+    "sv", "vfl", "vfb", "if", "ik", "ca", "ec", "se", "cr", "sd", "ud", "ua",
+    "il", "gf", "ps", "kf", "fk", "nk", "hk", "ks", "mfk", "gks", "us", "tsv",
+    "fsv", "bsc", "psv", "sv", "club", "atletico", "atlético", "deportivo",
+    "the", "de", "of", "and",
 }
 # Tokens shared by many different clubs. A match resting only on these is not a
 # match — "Real Salt Lake" and "Real Betis" are not the same team.
@@ -97,9 +106,17 @@ _GENERIC = {
 }
 
 
-def _tokens(s: str) -> frozenset[str]:
+def _deaccent(s: str) -> str:
+    """Strip diacritics. Team names arrive accented ('CA Unión', 'Lanús', 'Tromsø')
+    while the search index and our own word regex are ASCII, so without this the
+    term extractor finds nothing and the lookup silently never runs."""
     s = unicodedata.normalize("NFKD", s or "")
-    s = "".join(c for c in s if not unicodedata.combining(c)).lower()
+    s = "".join(c for c in s if not unicodedata.combining(c))
+    return s.replace("ø", "o").replace("Ø", "O").replace("ß", "ss").replace("æ", "ae").replace("Æ", "Ae")
+
+
+def _tokens(s: str) -> frozenset[str]:
+    s = _deaccent(s).lower()
     s = re.sub(r"[^a-z0-9]+", " ", s)
     return frozenset(t for t in s.split() if t not in _CLUB_NOISE and len(t) > 1)
 
@@ -437,8 +454,14 @@ async def _find_event(client: httpx.AsyncClient, event_slug: str, title: str) ->
     k = _key(event_slug)
     if not k:
         return None
-    terms = [w for w in _WORD_RE.findall(title or "") if w not in _STOP]
-    for term in terms[:2]:
+    # De-accent first: the index is ASCII and so is _WORD_RE, so 'CA Unión vs
+    # CA Lanús' would otherwise yield no terms at all and never be looked up.
+    seen: set[str] = set()
+    terms = [
+        w for w in _WORD_RE.findall(_deaccent(title))
+        if w not in _STOP and w.lower() not in _CLUB_NOISE and not (w in seen or seen.add(w))
+    ]
+    for term in terms[:3]:
         try:
             r = await client.get(f"{GATEWAY}/v1/search", params={"query": term, "limit": 20}, timeout=12)
             data = r.json()
