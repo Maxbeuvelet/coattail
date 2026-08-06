@@ -15,6 +15,7 @@ export const queryKeys = {
   snapshot: (top: number) => ['snapshot', top] as const,
   book: ['book'] as const,
   usBook: ['us-book'] as const,
+  liveBook: ['live-book'] as const,
   performance: ['performance'] as const,
   activity: ['activity'] as const,
 }
@@ -40,6 +41,16 @@ export function useUsBook() {
     queryKey: queryKeys.usBook,
     queryFn: api.usBook,
     refetchInterval: BOOK_REFETCH_MS,
+  })
+}
+
+/** Real money. Each refresh hits the venue and marks every position, so it
+ *  polls slower than the local book. */
+export function useLiveBook() {
+  return useQuery({
+    queryKey: queryKeys.liveBook,
+    queryFn: api.liveBook,
+    refetchInterval: 30_000,
   })
 }
 

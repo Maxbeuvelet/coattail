@@ -5,6 +5,7 @@ import type {
   Book,
   Follow,
   LeaderWindow,
+  LiveBook,
   OrderBy,
   Performance,
   Position,
@@ -109,6 +110,7 @@ export const api = {
 
   book: () => get<Book>('/api/book'),
   usBook: () => get<UsBook>('/api/us-book'),
+  liveBook: () => get<LiveBook>('/api/live-book'),
   performance: () => get<Performance>('/api/performance'),
   activity: (limit = 100) => get<ActivityEntry[]>('/api/activity', { limit }),
   tickNow: () => send<TickSummary>('POST', '/api/engine/tick'),

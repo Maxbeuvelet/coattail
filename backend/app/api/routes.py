@@ -9,6 +9,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
+from app.polymarket import us_account
 from app.polymarket.us_pricing import US_FEE_RATE
 
 router = APIRouter(prefix="/api")
@@ -340,6 +341,17 @@ async def us_book(request: Request) -> dict:
         "equity": round(bankroll + realized + unrealized, 2),
         "bankroll": bankroll,
     }
+
+
+@router.get("/live-book")
+async def live_book(request: Request) -> dict:
+    """Real money: what the Polymarket US account actually holds.
+
+    Read from the venue, not from our SQLite book, because the two can disagree —
+    and when they do, the exchange is right.
+    """
+    s = request.app.state.settings
+    return await us_account.live_book(s.polymarket_key_id, s.polymarket_secret_key)
 
 
 @router.get("/performance")

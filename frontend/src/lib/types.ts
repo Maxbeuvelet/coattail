@@ -190,6 +190,42 @@ export interface UsBook {
   bankroll: number
 }
 
+/** One real position on Polymarket US, as the exchange reports it. */
+export interface LivePosition {
+  slug: string
+  title: string
+  outcome: string
+  team: string
+  eventSlug: string
+  contracts: number
+  cost: number
+  avgPrice: number | null
+  /** Best bid — what we could sell into right now, not the mid. */
+  mark: number | null
+  settlementPx: number | null
+  value: number | null
+  unrealized: number | null
+  realized: number
+  expired: boolean
+  /** Payout if this resolves YES. The number that matters on a cheap longshot. */
+  ifWins: number
+}
+
+/** Real money, read from the venue rather than the local book. */
+export interface LiveBook {
+  connected: boolean
+  /** Why we could not read the account, when connected is false. */
+  reason?: string
+  cash: number
+  positionCount: number
+  invested: number
+  marketValue: number
+  unrealized: number
+  ifAllWin: number
+  equity: number
+  positions: LivePosition[]
+}
+
 export interface UsShadow {
   closedCount: number
   realizedTotal: number

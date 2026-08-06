@@ -4,6 +4,7 @@ import { DiscoverPage } from '@/features/discover/DiscoverPage'
 import { FollowingPage } from '@/features/following/FollowingPage'
 import { BookPage } from '@/features/book/BookPage'
 import { UsBookPage } from '@/features/usbook/UsBookPage'
+import { LiveBookPage } from '@/features/livebook/LiveBookPage'
 import { PerformancePage } from '@/features/performance/PerformancePage'
 import { ActivityPage } from '@/features/activity/ActivityPage'
 import { SettingsPage } from '@/features/settings/SettingsPage'
@@ -17,6 +18,7 @@ export function App() {
         <Route path="/following" element={<FollowingPage />} />
         <Route path="/book" element={<BookPage />} />
         <Route path="/us-book" element={<UsBookPage />} />
+        <Route path="/live-book" element={<LiveBookPage />} />
         <Route path="/performance" element={<PerformancePage />} />
         <Route path="/activity" element={<ActivityPage />} />
         <Route path="/settings" element={<SettingsPage />} />
