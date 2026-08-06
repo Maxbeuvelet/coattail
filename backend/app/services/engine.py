@@ -19,7 +19,7 @@ from app.db.repo import Database
 from app.polymarket.data_client import DataClient
 from app.polymarket.us_pricing import US_FEE_RATE, us_quotes
 from app.services.config_store import AutopilotView, ConfigStore, RiskView
-from app.services.executor import Executor
+from app.services.executor import DryRunOrder, Executor
 
 log = logging.getLogger("copybot.engine")
 
@@ -428,6 +428,14 @@ class FollowEngine:
                                 continue
                         try:
                             newpos = self.executor.open_copy(self.db, p, name, stake)
+                        except DryRunOrder as dry:
+                            # Not a failure: the venue accepted the order shape
+                            # and we chose not to send it. No position exists.
+                            log.warning("DRY RUN %s: %s", p.get("title", "")[:44], dry)
+                            self.db.log("skip", f"dry run — {dry}", wallet=wallet,
+                                        name=name, title=p["title"], outcome=p["outcome"])
+                            self.db.mark_seen(wallet, asset)
+                            continue
                         except Exception as exc:  # noqa: BLE001
                             errors += 1
                             log.warning("open failed (%s): %s", p.get("title", "")[:48], exc)

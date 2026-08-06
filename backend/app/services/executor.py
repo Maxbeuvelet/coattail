@@ -95,6 +95,15 @@ class LiveOrderError(RuntimeError):
     """An order was rejected, unfilled, or refused by a local safety check."""
 
 
+class DryRunOrder(LiveOrderError):
+    """The order validated against the venue but was deliberately not sent.
+
+    Distinct from a failure: a preview that comes back clean means credentials,
+    market matching, routing and order shape are all correct. No position is
+    booked, because none exists.
+    """
+
+
 class LiveExecutor(Executor):
     """Places real money orders on Polymarket US via the official SDK.
 
@@ -174,22 +183,28 @@ class LiveExecutor(Executor):
                 return f"{ex.get('orderRejectReason')}: {ex.get('text') or ''}".strip()
         return None
 
+    def buying_power(self) -> float:
+        """USD available to trade. Used as a preflight so an underfunded account
+        fails with a clear message instead of a venue rejection."""
+        try:
+            bals = (self.client.account.balances() or {}).get("balances") or []
+        except Exception as exc:  # noqa: BLE001
+            log.debug("balance check failed: %s", exc)
+            return float("nan")
+        return sum(float(b.get("buyingPower") or 0) for b in bals if b.get("currency") == "USD")
+
     def _submit(self, params: dict) -> dict:
+        """Send the order, or validate it without sending when dry_run."""
         if self.dry_run:
-            preview = self.client.orders.preview({"request": params})
-            order = (preview or {}).get("order") or {}
-            log.warning("DRY RUN — order previewed, not sent: %s", order.get("marketSlug"))
-            # Shape a preview like a fill so the caller path is identical.
-            avg = float((order.get("avgPx") or {}).get("value") or 0)
-            qty = float(order.get("quantity") or 0)
-            return {
-                "id": order.get("id") or "preview",
-                "executions": [{
-                    "lastShares": str(qty),
-                    "lastPx": {"value": str(avg), "currency": "USD"},
-                    "type": "EXECUTION_TYPE_FILL",
-                }],
-            }
+            order = (self.client.orders.preview({"request": params}) or {}).get("order") or {}
+            meta = order.get("marketMetadata") or {}
+            team = (meta.get("team") or {}).get("name") or ""
+            raise DryRunOrder(
+                f"validated, not sent — {order.get('marketSlug')} "
+                f"[{meta.get('title') or ''} · {team} · {meta.get('outcome') or ''}] "
+                f"{order.get('intent')} {order.get('quantity')} @ "
+                f"{(order.get('price') or {}).get('value')} → state {order.get('state')}"
+            )
         return self.client.orders.create(params)
 
     # ── the Executor interface ───────────────────────────────
@@ -206,16 +221,46 @@ class LiveExecutor(Executor):
             raise LiveOrderError(f"stake ${spend:.2f} below the $1 minimum")
 
         predicted = float(us.get("price") or 0)
+        if predicted <= 0:
+            raise LiveOrderError("no reference price for this market")
+
+        # Marketable LIMIT rather than a true market order. The venue requires a
+        # price anyway, and a limit gives a hard ceiling: we cross the spread to
+        # take liquidity but can never pay more than `limit`. IOC means any
+        # unfilled remainder is cancelled instead of resting on the book.
+        limit = predicted * (1 + self.slippage_bips / 10_000)
+        limit = min(0.99, max(0.01, round(limit, 2)))  # 0.01 tick, valid range
+        quantity = int(spend // limit)                 # contracts are integers
+        if quantity < 1:
+            raise LiveOrderError(
+                f"${spend:.2f} buys less than one contract at {limit:.2f}"
+            )
+        cost = quantity * limit
+        if cost > self.max_usd_per_order + 1e-9:
+            raise LiveOrderError(f"cost ${cost:.2f} exceeds cap ${self.max_usd_per_order:.2f}")
+
+        # Preflight the balance so an empty account gives a clear reason rather
+        # than an opaque venue rejection. Skipped in dry run, which spends
+        # nothing and whose whole purpose is to validate the path on an
+        # unfunded account. NaN means the check itself failed — don't block on
+        # that, let the venue decide.
+        if not self.dry_run:
+            bp = self.buying_power()
+            if bp == bp and bp < cost:  # NaN != NaN
+                raise LiveOrderError(
+                    f"insufficient buying power: ${bp:.2f} available, order needs ${cost:.2f}"
+                )
+
         params = {
             "marketSlug": slug,
             # LONG buys the YES side of the proposition, SHORT buys the NO side.
             "intent": "ORDER_INTENT_BUY_LONG" if buy_yes else "ORDER_INTENT_BUY_SHORT",
-            "type": "ORDER_TYPE_MARKET",
-            "cashOrderQty": self._amount(spend),
+            "type": "ORDER_TYPE_LIMIT",
+            "price": self._amount(limit),
+            "quantity": quantity,
             "tif": "TIME_IN_FORCE_IMMEDIATE_OR_CANCEL",
             "synchronousExecution": True,
             "manualOrderIndicator": "MANUAL_ORDER_INDICATOR_AUTOMATIC",
-            "slippageTolerance": {"bips": self.slippage_bips},
         }
         resp = self._submit(params)
         reason = self._reject_reason(resp)
