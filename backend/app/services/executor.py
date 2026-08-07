@@ -235,8 +235,14 @@ class LiveExecutor(Executor):
         # price anyway, and a limit gives a hard ceiling: we cross the spread to
         # take liquidity but can never pay more than `limit`. IOC means any
         # unfilled remainder is cancelled instead of resting on the book.
+        #
+        # `limit` is what WE pay per contract. Prices on the wire are always
+        # quoted on the YES side, so a NO buy (BUY_SHORT) is a sale of YES and
+        # its wire price is a MINIMUM of 1 - limit, not a maximum of limit.
+        # Sending `limit` directly on a short caps the wrong side of the book.
         limit = predicted * (1 + self.slippage_bips / 10_000)
         limit = min(0.99, max(0.01, round(limit, 2)))  # 0.01 tick, valid range
+        wire_price = limit if buy_yes else round(1.0 - limit, 2)
         quantity = int(spend // limit)                 # contracts are integers
         if quantity < 1:
             raise LiveOrderError(
@@ -263,7 +269,7 @@ class LiveExecutor(Executor):
             # LONG buys the YES side of the proposition, SHORT buys the NO side.
             "intent": "ORDER_INTENT_BUY_LONG" if buy_yes else "ORDER_INTENT_BUY_SHORT",
             "type": "ORDER_TYPE_LIMIT",
-            "price": self._amount(limit),
+            "price": self._amount(wire_price),
             "quantity": quantity,
             "tif": "TIME_IN_FORCE_IMMEDIATE_OR_CANCEL",
             "synchronousExecution": True,
@@ -284,6 +290,10 @@ class LiveExecutor(Executor):
             # Partial fill: we own what filled, the rest was cancelled. Book it.
             log.warning("partial fill on %s (%s) — booking %g shares", slug, reason, shares)
 
+        # `fill_price` is the YES-side quote. On a short, our cash cost per
+        # contract is 1 - that. Booking the raw quote overstated both the entry
+        # price and the stake on every NO position.
+        cost_per_contract = fill_price if buy_yes else (1.0 - fill_price)
         position = {
             "wallet": trader_pos["_wallet"],
             "name": name,
@@ -292,9 +302,9 @@ class LiveExecutor(Executor):
             "title": trader_pos["title"],
             "outcome": trader_pos["outcome"],
             "event_slug": trader_pos.get("eventSlug", ""),
-            "entry_price": round(fill_price, 4),
+            "entry_price": round(cost_per_contract, 4),
             "shares": round(shares, 4),
-            "stake_usd": round(shares * fill_price, 2),
+            "stake_usd": round(shares * cost_per_contract, 2),
         }
         pid = db.insert_position(position)
         position["id"] = pid
@@ -304,21 +314,24 @@ class LiveExecutor(Executor):
             order_id=str(resp.get("id") or ""),
             slug=slug,
             predicted=predicted or None,
-            actual=round(fill_price, 4),
+            actual=round(cost_per_contract, 4),
             shares=round(shares, 4),
             fees=round(fees, 4),
             side="YES" if buy_yes else "NO",
         )
-        slip = (fill_price - predicted) if predicted else 0.0
+        # Compare like with like: `predicted` is what WE expected to pay, so the
+        # comparison must use our cost, not the YES-side quote.
+        slip = (cost_per_contract - predicted) if predicted else 0.0
+        side = "YES" if buy_yes else "NO"
         db.log(
             "copy_open",
-            f"LIVE {name}: bought {shares:g} {'YES' if buy_yes else 'NO'} @ {fill_price:.3f} "
-            f"(${spend:,.2f}; expected {predicted:.3f}, slippage {slip:+.3f})",
+            f"LIVE {name}: bought {shares:g} {side} @ {cost_per_contract:.3f} "
+            f"(${position['stake_usd']:,.2f}; expected {predicted:.3f}, slippage {slip:+.3f})",
             wallet=position["wallet"], name=name, title=position["title"],
-            outcome=position["outcome"], amount=round(spend, 2),
+            outcome=position["outcome"], amount=position["stake_usd"],
         )
         log.warning("LIVE FILL %s %s @ %.4f (predicted %.4f, slip %+.4f, fee %.4f)",
-                    slug, "YES" if buy_yes else "NO", fill_price, predicted, slip, fees)
+                    slug, side, cost_per_contract, predicted, slip, fees)
         return position
 
     def close_copy(self, db: Database, position: dict, exit_price: float) -> float:

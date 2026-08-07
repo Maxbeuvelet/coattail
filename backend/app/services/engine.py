@@ -249,7 +249,10 @@ class FollowEngine:
             val = (s or {}).get("settlement")
             if val is None:
                 continue
-            price = 1.0 if float(val) >= 0.5 else 0.0
+            # Settlement is quoted on the YES side. A NO position pays out when
+            # the market settles to 0, so its payout is the complement.
+            yes = 1.0 if float(val) >= 0.5 else 0.0
+            price = yes if pos.get("live_side") != "NO" else 1.0 - yes
             realized = round(pos["shares"] * price - pos["stake_usd"], 2)
             self.db.close_position(pos["id"], price, realized)
             self.db.record_live_exit(pos["id"], price, 0.0)
