@@ -7,3 +7,16 @@
 	encode zstd gzip
 	reverse_proxy app:8000
 }
+
+# Live-money instance, on its own port and its own database.
+# Deliberately NOT on the main address: the paper book and the real book must
+# never be one URL apart, because they answer different questions and only one
+# of them can lose money.
+#
+# Returns 502 when the live container isn't running (it only starts under the
+# "live" compose profile). Caddy resolves this upstream per request, so a
+# stopped live instance never affects the paper dashboard above.
+:8090 {
+	encode zstd gzip
+	reverse_proxy live:8000
+}

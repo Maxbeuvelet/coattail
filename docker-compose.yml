@@ -20,6 +20,37 @@ services:
     expose:
       - "8000"
 
+  # ── Live money, on Polymarket US ─────────────────────────────────────────
+  # A SEPARATE container with its OWN database. The paper book above has ten
+  # days of history in it and is the thing every measurement is judged against;
+  # writing real fills into the same table would destroy that record. Two
+  # instances, two volumes, no shared state.
+  #
+  # Started only when you ask for it:   docker compose --profile live up -d
+  # Stopped without touching paper:     docker compose stop live
+  live:
+    build: .
+    restart: unless-stopped
+    profiles: ["live"]
+    environment:
+      - OWNER_KEY=${OWNER_KEY:?set OWNER_KEY in .env}
+      - DB_PATH=/data/copybot-live.sqlite
+      - LIVE_TRADING=true
+      # Polymarket US credentials from polymarket.us/developer. Absent or wrong
+      # and the app falls back to paper rather than starting half-armed.
+      - POLYMARKET_KEY_ID=${POLYMARKET_KEY_ID:?set POLYMARKET_KEY_ID in .env}
+      - POLYMARKET_SECRET_KEY=${POLYMARKET_SECRET_KEY:?set POLYMARKET_SECRET_KEY in .env}
+      # Hard per-order ceiling, enforced inside the executor.
+      - LIVE_MAX_USD_PER_ORDER=${LIVE_MAX_USD_PER_ORDER:-2}
+      - LIVE_SLIPPAGE_BIPS=${LIVE_SLIPPAGE_BIPS:-200}
+      # Defaults to true on purpose: a fresh deploy previews orders instead of
+      # sending them. Set LIVE_DRY_RUN=false in .env once you've seen it work.
+      - LIVE_DRY_RUN=${LIVE_DRY_RUN:-true}
+    volumes:
+      - live-data:/data
+    expose:
+      - "8000"
+
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
@@ -30,6 +61,8 @@ services:
     ports:
       - "80:80"
       - "443:443"
+      # Live dashboard on its own port, so the two are never confused.
+      - "8090:8090"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
@@ -39,5 +72,6 @@ services:
 
 volumes:
   app-data:
+  live-data:
   caddy-data:
   caddy-config:
