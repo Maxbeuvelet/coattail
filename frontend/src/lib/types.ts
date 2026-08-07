@@ -198,9 +198,12 @@ export interface LivePosition {
   team: string
   eventSlug: string
   contracts: number
+  /** True when we hold the NO side. Quotes are YES-side, so this position is
+   *  worth 1 - mark per contract and pays out when the market resolves NO. */
+  short?: boolean
   cost: number
   avgPrice: number | null
-  /** Best bid — what we could sell into right now, not the mid. */
+  /** What we could sell into right now, already expressed for the side we hold. */
   mark: number | null
   settlementPx: number | null
   value: number | null

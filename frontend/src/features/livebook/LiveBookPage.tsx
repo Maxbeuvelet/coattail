@@ -145,6 +145,7 @@ export function LiveBookPage() {
                       <td className={styles.market}>
                         <span className={styles.title} title={p.title}>{p.title}</span>
                         <span className={styles.outcome}>{p.outcome}</span>
+                        {p.short && <span className={styles.short}>NO side</span>}
                         {p.expired && <span className={styles.settled}>settled</span>}
                       </td>
                       <td className={styles.num}>{p.contracts}</td>

@@ -66,25 +66,35 @@ def _fetch(key_id: str, secret_key: str) -> dict:
         except Exception as exc:  # noqa: BLE001
             log.debug("bbo failed for %s: %s", slug, exc)
 
-        value = net * mark if mark else None
+        # A negative netPosition is a SHORT — we hold the NO side. Quotes are
+        # always YES-side, so a short contract is worth 1 - mark and pays out
+        # when the market resolves NO. Marking it as net*mark makes the whole
+        # position negative, which is not a price a position can have.
+        qty = abs(net)
+        is_short = net < 0
+        our_mark = (1.0 - mark) if (mark is not None and is_short) else mark
+        value = qty * our_mark if our_mark is not None else None
         rows.append({
             "slug": slug,
             "title": md.get("title") or slug,
+            # The market's own label. Which side we hold is `short`, kept
+            # separate so the UI doesn't end up rendering "NO No".
             "outcome": md.get("outcome") or "",
             "team": ((md.get("team") or {}) or {}).get("name") or "",
             "eventSlug": md.get("eventSlug") or "",
-            "contracts": net,
+            "contracts": qty,
+            "short": is_short,
             "cost": round(cost, 2),
-            "avgPrice": round(cost / net, 4) if net else None,
-            "mark": round(mark, 4) if mark else None,
+            "avgPrice": round(cost / qty, 4) if qty else None,
+            "mark": round(our_mark, 4) if our_mark is not None else None,
             "settlementPx": round(settle, 4) if settle else None,
             "value": round(value, 2) if value is not None else None,
             "unrealized": round(value - cost, 2) if value is not None else None,
             "realized": round(_val(p.get("realized")), 2),
             "expired": bool(p.get("expired")),
-            # Max payout if this resolves YES — the number that matters on a
-            # cheap longshot, where mark-to-market understates the outcome.
-            "ifWins": round(net * 1.0, 2),
+            # Max payout at resolution — the number that matters on a cheap
+            # longshot, where mark-to-market understates the outcome.
+            "ifWins": round(qty * 1.0, 2),
         })
 
     rows.sort(key=lambda r: -(r["cost"] or 0))

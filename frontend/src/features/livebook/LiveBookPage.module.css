@@ -134,3 +134,15 @@
     grid-template-columns: repeat(2, 1fr);
   }
 }
+
+/* We hold the NO side: quotes are YES-side, so this row is priced 1 - mark. */
+.short {
+  display: inline-block;
+  margin: 3px 0 0 var(--sp-2);
+  padding: 1px var(--sp-2);
+  border-radius: var(--r-sm);
+  background: var(--info-bg);
+  color: var(--info);
+  font-size: var(--fs-11);
+  font-weight: var(--fw-medium);
+}
