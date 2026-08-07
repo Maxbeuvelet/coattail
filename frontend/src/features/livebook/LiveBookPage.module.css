@@ -1,8 +1,28 @@
 .tiles {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: var(--sp-3);
   margin-bottom: var(--sp-4);
+}
+/* Chart + settled table sit under the open positions they follow from. */
+.panelHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: var(--sp-3) var(--sp-4) 0;
+  margin-bottom: var(--sp-2);
+}
+.panelTitle {
+  font-size: var(--fs-13);
+  font-weight: var(--fw-semibold);
+  color: var(--text-1);
+}
+.panelHint {
+  font-size: var(--fs-11);
+  color: var(--text-4);
+}
+.settledPanel {
+  margin-top: var(--sp-4);
 }
 .hint {
   margin: 0 0 var(--sp-3);
@@ -99,6 +119,14 @@
   color: var(--warn);
   font-size: var(--fs-11);
   font-weight: var(--fw-medium);
+}
+
+/* Widest breakpoint first: both match on a narrow screen, and the later rule
+   wins, so 720px must come last to actually take effect. */
+@media (max-width: 1100px) {
+  .tiles {
+    grid-template-columns: repeat(3, 1fr);
+  }
 }
 
 @media (max-width: 720px) {

@@ -211,6 +211,18 @@ export interface LivePosition {
   ifWins: number
 }
 
+/** A resolved market, with the venue's own realized P&L. */
+export interface LiveSettled {
+  t: string | null
+  slug: string
+  title: string
+  outcome: string
+  contracts: number
+  cost: number
+  payout: number
+  realized: number
+}
+
 /** Real money, read from the venue rather than the local book. */
 export interface LiveBook {
   connected: boolean
@@ -224,6 +236,16 @@ export interface LiveBook {
   ifAllWin: number
   equity: number
   positions: LivePosition[]
+  /** Settled history — every resolution on the account, bot or manual. */
+  realizedTotal?: number
+  settledCount?: number
+  wins?: number
+  losses?: number
+  winRate?: number | null
+  /** Account value with zero P&L, so the curve starts flat. */
+  baseline?: number
+  equityCurve?: EquityPoint[]
+  settled?: LiveSettled[]
 }
 
 export interface UsShadow {
