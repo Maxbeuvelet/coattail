@@ -335,17 +335,18 @@ class LiveExecutor(Executor):
             "slippageTolerance": {"bips": self.slippage_bips},
         }
         if self.dry_run:
-            log.warning("DRY RUN — would close %s", slug)
-            resp = {"id": "preview", "executions": []}
-        else:
-            resp = self.client.orders.close_position(params)
+            raise DryRunOrder(f"would close {slug} ({position.get('shares')} shares) — not sent")
+        resp = self.client.orders.close_position(params)
 
         fill_price, shares, fees = self._fill(resp)
         if fill_price <= 0:
-            # Nothing came back (already settled, or no bid). Fall back to the
-            # engine's mark so the book still closes rather than hanging open.
-            fill_price = exit_price
-            log.warning("close of %s returned no execution; booking at mark %.4f", slug, exit_price)
+            # Nothing sold. Do NOT book a close at the engine's mark — that
+            # would tell the local book we exited while the exchange still shows
+            # the position, the same divergence that lost money on the entry
+            # path. Leave it open and let the next tick retry; a market that has
+            # already resolved is handled by settlement reconciliation instead.
+            reason = self._reject_reason(resp) or "no execution returned"
+            raise LiveOrderError(f"close of {slug} did not fill ({reason}) — left open")
 
         proceeds = position["shares"] * fill_price
         realized = round(proceeds - position["stake_usd"] - fees, 2)

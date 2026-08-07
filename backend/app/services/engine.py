@@ -10,6 +10,7 @@ Runs the same in paper and (Phase 4) live mode; only the Executor differs.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime, timezone
 
@@ -224,6 +225,45 @@ class FollowEngine:
         return None
 
     # ── US shadow book ───────────────────────────────────────
+    async def _reconcile_settled(self) -> int:
+        """Close local positions whose Polymarket US market has already resolved.
+
+        Sports markets settle on their own, often before the trader we copy ever
+        exits. Without this the copy stays open in our book forever — the VPS
+        still carries June baseball from exactly this gap — and the account's
+        real cash would drift away from what the book claims.
+
+        Settles at 1.0 or 0.0, which is what the venue actually paid.
+        """
+        live = [p for p in self.db.open_positions() if p.get("live_slug")]
+        if not live:
+            return 0
+        closed = 0
+        for pos in live:
+            try:
+                s = await asyncio.to_thread(
+                    self.executor.client.markets.settlement, pos["live_slug"]
+                )
+            except Exception:  # noqa: BLE001
+                continue  # not settled yet, or lookup failed — try again later
+            val = (s or {}).get("settlement")
+            if val is None:
+                continue
+            price = 1.0 if float(val) >= 0.5 else 0.0
+            realized = round(pos["shares"] * price - pos["stake_usd"], 2)
+            self.db.close_position(pos["id"], price, realized)
+            self.db.record_live_exit(pos["id"], price, 0.0)
+            self.db.log(
+                "copy_exit",
+                f"SETTLED {pos['name']} @ {price:.0f} · "
+                f"realized {'+' if realized >= 0 else ''}${realized:,.2f}",
+                wallet=pos["wallet"], name=pos["name"], title=pos["title"],
+                outcome=pos["outcome"], amount=realized,
+            )
+            log.warning("settled %s at %.0f (realized %+.2f)", pos["live_slug"], price, realized)
+            closed += 1
+        return closed
+
     async def _resolve_us_market(self, trader_pos: dict) -> dict | None:
         """Which Polymarket US market and side would express this trade, and at
         what price? Returns None when the matcher isn't confident — the same
@@ -352,6 +392,15 @@ class FollowEngine:
         # Fast mode only copies soon-resolving positions (quick turnover).
         fast_mode = ac.autopilot_enabled and ac.autopilot_rank == "churn"
         opened = closed = marked = errors = 0
+
+        # Settled markets first: the venue has already paid, so clearing them
+        # frees the book before we consider anything new. Counters must exist
+        # before this runs.
+        if getattr(self.executor, "needs_us_market", False):
+            try:
+                closed += await self._reconcile_settled()
+            except Exception as exc:  # noqa: BLE001
+                log.warning("settlement reconcile failed: %s", exc)
         us_budget = _US_ENTRY_BUDGET_PER_TICK
         us_mark_budget = _US_MARK_BUDGET_PER_TICK
 
@@ -371,7 +420,18 @@ class FollowEngine:
             # ── Exits: our open copies of this trader they no longer hold ──
             for pos in self.db.open_positions():
                 if pos["wallet"] == wallet and pos["asset"] not in current_assets:
-                    self.executor.close_copy(self.db, pos, pos["cur_price"])
+                    try:
+                        self.executor.close_copy(self.db, pos, pos["cur_price"])
+                    except DryRunOrder as dry:
+                        log.warning("DRY RUN close %s: %s", pos["title"][:40], dry)
+                        continue
+                    except Exception as exc:  # noqa: BLE001
+                        # Leave it open and retry next tick. A close that failed
+                        # must never take the whole tick down with it, and must
+                        # never be booked as if it succeeded.
+                        errors += 1
+                        log.warning("close failed (%s): %s", pos["title"][:40], exc)
+                        continue
                     closed += 1
                     await self._shadow_close(pos)
 
