@@ -95,6 +95,14 @@ class LiveOrderError(RuntimeError):
     """An order was rejected, unfilled, or refused by a local safety check."""
 
 
+class SkipTrade(LiveOrderError):
+    """A deliberate refusal, not a failure — already held, too small, no match.
+
+    Separated so the tick's error count means "something went wrong" rather than
+    "the engine declined to trade", which it does constantly and by design.
+    """
+
+
 class DryRunOrder(LiveOrderError):
     """The order validated against the venue but was deliberately not sent.
 
@@ -214,18 +222,18 @@ class LiveExecutor(Executor):
         us = trader_pos.get("_us") or {}
         slug, buy_yes = us.get("slug"), us.get("buy_yes")
         if not slug or buy_yes is None:
-            raise LiveOrderError("no confidently matched Polymarket US market — skipped")
+            raise SkipTrade("no confidently matched Polymarket US market")
 
         # Defence in depth against buying the same US market twice. The engine
         # already dedupes on (wallet, asset), but two different international
         # titles can resolve to one US market, and any future bookkeeping gap
         # must not translate into duplicate real orders.
         if db.open_position_by_live_slug(slug):
-            raise LiveOrderError(f"already hold {slug} — not buying it twice")
+            raise SkipTrade(f"already hold {slug} — not buying it twice")
 
         spend = min(float(stake_usd), self.max_usd_per_order)
         if spend < 1.0:
-            raise LiveOrderError(f"stake ${spend:.2f} below the $1 minimum")
+            raise SkipTrade(f"stake ${spend:.2f} below the $1 minimum")
 
         predicted = float(us.get("price") or 0)
         if predicted <= 0:
@@ -245,7 +253,7 @@ class LiveExecutor(Executor):
         wire_price = limit if buy_yes else round(1.0 - limit, 2)
         quantity = int(spend // limit)                 # contracts are integers
         if quantity < 1:
-            raise LiveOrderError(
+            raise SkipTrade(
                 f"${spend:.2f} buys less than one contract at {limit:.2f}"
             )
         cost = quantity * limit
@@ -260,7 +268,7 @@ class LiveExecutor(Executor):
         if not self.dry_run:
             bp = self.buying_power()
             if bp == bp and bp < cost:  # NaN != NaN
-                raise LiveOrderError(
+                raise SkipTrade(
                     f"insufficient buying power: ${bp:.2f} available, order needs ${cost:.2f}"
                 )
 

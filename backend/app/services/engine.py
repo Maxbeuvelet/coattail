@@ -20,7 +20,7 @@ from app.db.repo import Database
 from app.polymarket.data_client import DataClient
 from app.polymarket.us_pricing import US_FEE_RATE, us_quotes
 from app.services.config_store import AutopilotView, ConfigStore, RiskView
-from app.services.executor import DryRunOrder, Executor
+from app.services.executor import DryRunOrder, Executor, SkipTrade
 
 log = logging.getLogger("copybot.engine")
 
@@ -497,6 +497,15 @@ class FollowEngine:
                             log.warning("DRY RUN %s: %s", p.get("title", "")[:44], dry)
                             self.db.log("skip", f"dry run — {dry}", wallet=wallet,
                                         name=name, title=p["title"], outcome=p["outcome"])
+                            self.db.mark_seen(wallet, asset)
+                            continue
+                        except SkipTrade as skip:
+                            # Declined on purpose (already held, too small, no
+                            # match). Routine, so it must not inflate the error
+                            # count the dashboard shows.
+                            if newly:
+                                self.db.log("skip", str(skip), wallet=wallet, name=name,
+                                            title=p["title"], outcome=p["outcome"])
                             self.db.mark_seen(wallet, asset)
                             continue
                         except Exception as exc:  # noqa: BLE001
