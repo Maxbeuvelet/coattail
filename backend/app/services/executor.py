@@ -191,6 +191,22 @@ class LiveExecutor(Executor):
                 return f"{ex.get('orderRejectReason')}: {ex.get('text') or ''}".strip()
         return None
 
+    def _book(self, slug: str) -> tuple[float | None, float | None]:
+        """Best bid/ask for a market, YES-side. Used to price closing orders."""
+        try:
+            d = (self.client.markets.bbo(slug) or {}).get("marketData") or {}
+        except Exception as exc:  # noqa: BLE001
+            log.debug("bbo failed for %s: %s", slug, exc)
+            return None, None
+
+        def px(k: str) -> float | None:
+            v = float((d.get(k) or {}).get("value") or 0)
+            return v if 0.0 < v < 1.0 else None
+
+        bid, ask = px("bestBid"), px("bestAsk")
+        cur = px("currentPx")
+        return (bid or cur), (ask or cur)
+
     def buying_power(self) -> float:
         """USD available to trade. Used as a preflight so an underfunded account
         fails with a clear message instead of a venue rejection."""
@@ -343,24 +359,56 @@ class LiveExecutor(Executor):
         return position
 
     def close_copy(self, db: Database, position: dict, exit_price: float) -> float:
-        """Close the whole position in its market. `exit_price` is only the
-        engine's expectation — the realized number comes from the actual fill."""
+        """Close the whole position with an explicit marketable limit order.
+
+        The SDK's `close_position` builds a limit order internally but its params
+        carry no price, and the venue rejects it with "Price is required for
+        limit order". So we place the closing order ourselves, the same way the
+        entry path already works — which also lets us bound the price we accept
+        rather than taking whatever the book offers.
+
+        `exit_price` is only the engine's expectation; the realized number comes
+        from the actual fill.
+        """
         slug = position.get("live_slug")
         if not slug:
             raise LiveOrderError(f"position {position['id']} has no US market slug to close")
+        qty = int(round(float(position.get("shares") or 0)))
+        if qty < 1:
+            raise LiveOrderError(f"position {position['id']} has no shares to close")
+
+        is_short = (position.get("live_side") == "NO")
+        bid, ask = self._book(slug)
+        if bid is None or ask is None:
+            raise LiveOrderError(f"no book for {slug} — left open")
+
+        slip = self.slippage_bips / 10_000
+        if is_short:
+            # Closing a short means buying YES back: accept paying a little
+            # above the ask, never below it.
+            wire = min(0.99, max(0.01, round(ask * (1 + slip), 2)))
+            intent = "ORDER_INTENT_SELL_SHORT"
+        else:
+            # Selling YES: accept a little under the bid, never above it.
+            wire = min(0.99, max(0.01, round(bid * (1 - slip), 2)))
+            intent = "ORDER_INTENT_SELL_LONG"
 
         params = {
             "marketSlug": slug,
+            "intent": intent,
+            "type": "ORDER_TYPE_LIMIT",
+            "price": self._amount(wire),
+            "quantity": qty,
+            "tif": "TIME_IN_FORCE_IMMEDIATE_OR_CANCEL",
             "synchronousExecution": True,
             "manualOrderIndicator": "MANUAL_ORDER_INDICATOR_AUTOMATIC",
-            "slippageTolerance": {"bips": self.slippage_bips},
         }
         if self.dry_run:
-            raise DryRunOrder(f"would close {slug} ({position.get('shares')} shares) — not sent")
-        resp = self.client.orders.close_position(params)
+            raise DryRunOrder(f"would close {slug} ({qty} {'NO' if is_short else 'YES'}) — not sent")
+        resp = self.client.orders.create(params)
 
         fill_price, shares, fees = self._fill(resp)
-        if fill_price <= 0:
+        if fill_price <= 0 or shares <= 0:
             # Nothing sold. Do NOT book a close at the engine's mark — that
             # would tell the local book we exited while the exchange still shows
             # the position, the same divergence that lost money on the entry
@@ -369,8 +417,11 @@ class LiveExecutor(Executor):
             reason = self._reject_reason(resp) or "no execution returned"
             raise LiveOrderError(f"close of {slug} did not fill ({reason}) — left open")
 
-        proceeds = position["shares"] * fill_price
+        # Quotes are YES-side: closing a short returns 1 - price per contract.
+        proceeds_per = (1.0 - fill_price) if is_short else fill_price
+        proceeds = shares * proceeds_per
         realized = round(proceeds - position["stake_usd"] - fees, 2)
+        fill_price = proceeds_per
         db.close_position(position["id"], round(fill_price, 4), realized)
         db.record_live_exit(position["id"], round(fill_price, 4), round(fees, 4))
         db.log(
