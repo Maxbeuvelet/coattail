@@ -33,11 +33,18 @@ def _fetch(key_id: str, secret_key: str) -> dict:
     """Blocking fetch — run off the event loop by `live_book`."""
     c = _client(key_id, secret_key)
 
-    cash = 0.0
+    # `currentBalance` is NOT spendable. Short positions post collateral, which
+    # the venue holds as `marginRequirement`; what is actually free to trade is
+    # `buyingPower`. Reporting the former as "cash" overstates what the bot can
+    # deploy — with four shorts open, $25.03 of balance was $2.09 of buying power.
+    cash = balance = reserved = 0.0
     try:
         for b in (c.account.balances() or {}).get("balances") or []:
-            if b.get("currency") == "USD":
-                cash += float(b.get("currentBalance") or 0)
+            if b.get("currency") != "USD":
+                continue
+            balance += float(b.get("currentBalance") or 0)
+            cash += float(b.get("buyingPower") or 0)
+            reserved += float(b.get("marginRequirement") or 0)
     except Exception as exc:  # noqa: BLE001
         log.warning("balance fetch failed: %s", exc)
 
@@ -146,7 +153,10 @@ def _fetch(key_id: str, secret_key: str) -> dict:
     losses = sum(1 for s in settled if s["realized"] < 0)
     return {
         "connected": True,
+        # Spendable, not total. See the balance comment above.
         "cash": round(cash, 2),
+        "balance": round(balance, 2),
+        "reserved": round(reserved, 2),
         "positionCount": len(rows),
         "invested": invested,
         "marketValue": value,

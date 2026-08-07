@@ -231,7 +231,13 @@ export interface LiveBook {
   connected: boolean
   /** Why we could not read the account, when connected is false. */
   reason?: string
+  /** Spendable buying power — NOT the account balance. Shorts post collateral,
+   *  which the venue holds back, so these differ a lot when shorts are open. */
   cash: number
+  /** Total USD balance, including collateral held against short positions. */
+  balance?: number
+  /** Collateral currently locked as margin. */
+  reserved?: number
   positionCount: number
   invested: number
   marketValue: number

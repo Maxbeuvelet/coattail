@@ -41,7 +41,15 @@ export function LiveBookPage() {
       ) : (
         <>
           <div className={styles.tiles}>
-            <StatTile label="Cash" value={usd(data.cash)} sub="available to trade" />
+            <StatTile
+              label="Buying power"
+              value={usd(data.cash)}
+              sub={
+                data.reserved
+                  ? `${usd(data.balance ?? 0)} balance · ${usd(data.reserved)} held as margin`
+                  : 'available to trade'
+              }
+            />
             <StatTile label="Invested" value={usd(data.invested)} sub={`${data.positionCount} positions`} />
             <StatTile
               label="Market value"
