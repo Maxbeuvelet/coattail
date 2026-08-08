@@ -47,6 +47,9 @@ export interface RiskConfig {
   dailyLossKillPct: number
   priceBand: [number, number]
   enginePaused: boolean
+  /** Copy the trader OUT as well as in. Off = hold every copy to resolution,
+   *  avoiding a second spread crossing plus taker fees on a short hold. */
+  followExits?: boolean
 }
 
 export type AutopilotRank = 'roi' | 'pnl' | 'pnl_30d' | 'churn'
@@ -74,6 +77,7 @@ export interface SettingsPatch {
   priceBandLow?: number
   priceBandHigh?: number
   enginePaused?: boolean
+  followExits?: boolean
   autopilotEnabled?: boolean
   autopilotRank?: AutopilotRank
   autopilotCount?: number

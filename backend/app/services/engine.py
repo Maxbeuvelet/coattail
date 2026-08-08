@@ -421,7 +421,13 @@ class FollowEngine:
             current_assets = {p["asset"] for p in trader_positions if p.get("asset")}
 
             # ── Exits: our open copies of this trader they no longer hold ──
-            for pos in self.db.open_positions():
+            # When follow_exits is off we ignore the trader leaving and hold to
+            # resolution instead. Measured on the live book: copies that followed
+            # the trader out were held a median of 12 minutes and averaged -18.6%,
+            # because a round trip pays two spread crossings and taker fees both
+            # ways while the price barely moves. Copies held to settlement
+            # averaged +9.1%. Settlement reconciliation closes them instead.
+            for pos in (self.db.open_positions() if r.follow_exits else []):
                 if pos["wallet"] == wallet and pos["asset"] not in current_assets:
                     try:
                         self.executor.close_copy(self.db, pos, pos["cur_price"])

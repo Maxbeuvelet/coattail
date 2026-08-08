@@ -21,6 +21,10 @@ _RISK_FIELDS: dict[str, type] = {
     "price_band_low": float,
     "price_band_high": float,
     "engine_paused": bool,
+    # Copy the trader OUT as well as in. Off = hold every copy to resolution.
+    # Exits cost a second spread crossing plus taker fees, which on short holds
+    # exceeds what the trader's timing is worth.
+    "follow_exits": bool,
 }
 _AUTO_FIELDS: dict[str, type] = {
     "autopilot_enabled": bool,
@@ -43,6 +47,7 @@ class RiskView:
     price_band_low: float
     price_band_high: float
     engine_paused: bool
+    follow_exits: bool
 
 
 @dataclass
@@ -101,6 +106,9 @@ class ConfigStore:
             "price_band_low": settings.price_band_low,
             "price_band_high": settings.price_band_high,
             "engine_paused": False,
+            # Default on, so paper behaviour is unchanged. Paper exits are free;
+            # only a live venue charges for them.
+            "follow_exits": True,
             "autopilot_enabled": False,
             "autopilot_rank": "roi",
             "autopilot_count": 5,
