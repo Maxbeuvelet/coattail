@@ -43,6 +43,9 @@ services:
       # Hard per-order ceiling, enforced inside the executor.
       - LIVE_MAX_USD_PER_ORDER=${LIVE_MAX_USD_PER_ORDER:-2}
       - LIVE_SLIPPAGE_BIPS=${LIVE_SLIPPAGE_BIPS:-200}
+      # Rest passively instead of crossing the spread. Only variables listed
+      # here reach the container — a value in .env alone does nothing.
+      - LIVE_MAKER=${LIVE_MAKER:-false}
       # Defaults to true on purpose: a fresh deploy previews orders instead of
       # sending them. Set LIVE_DRY_RUN=false in .env once you've seen it work.
       - LIVE_DRY_RUN=${LIVE_DRY_RUN:-true}
