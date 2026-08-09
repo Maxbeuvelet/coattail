@@ -108,6 +108,10 @@ export interface BotStatus {
   configuredLive?: boolean
   dryRun?: boolean
   maxUsdPerOrder?: number | null
+  /** Orders rest passively instead of crossing the spread. */
+  maker?: boolean
+  /** Resting orders not yet filled — not positions until the exchange fills them. */
+  pendingOrders?: number
   walletConfigured: boolean
   engine: {
     intervalSeconds: number
@@ -290,6 +294,16 @@ export interface Performance {
   usShadow?: UsShadow
   /** Market-aware matcher with correct bid/ask pricing. The one to trust. */
   usShadowV2?: UsShadow
+  /** How much worse our entry was than the copied trader's own entry. */
+  whaleGap?: {
+    trades: number
+    /** Absolute price difference, e.g. +0.070 means we paid 7c more. */
+    avgGap: number
+    /** Same as a fraction of what they paid. */
+    avgPct: number
+    worseCount: number
+    worseRate: number | null
+  } | null
 }
 
 export interface ActivityEntry {

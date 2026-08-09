@@ -85,6 +85,10 @@ async def status(request: Request) -> dict:
         "configuredLive": s.live_trading,
         "dryRun": mode == "LIVE-DRYRUN",
         "maxUsdPerOrder": s.live_max_usd_per_order if mode.startswith("LIVE") else None,
+        # Passive (maker) orders rest on the book instead of crossing it, so
+        # some copies sit as unfilled orders rather than positions.
+        "maker": bool(getattr(ex, "maker", False)),
+        "pendingOrders": len(request.app.state.db.pending_positions()),
         "walletConfigured": bool(s.polymarket_key_id and s.polymarket_secret_key),
         "engine": {
             "intervalSeconds": s.engine_interval_seconds,
@@ -415,6 +419,17 @@ async def performance(request: Request) -> dict:
             "equityCurve": pts,
         }
 
+    # How much worse our entry was than the trader's own.
+    wg = db.whale_gap()
+    wg_n = int(wg.get("n", 0) or 0)
+    whale_gap = {
+        "trades": wg_n,
+        "avgGap": round(float(wg.get("avg_gap") or 0), 4),
+        "avgPct": round(float(wg.get("avg_pct") or 0), 4),
+        "worseCount": int(wg.get("worse", 0) or 0),
+        "worseRate": round(int(wg.get("worse", 0) or 0) / wg_n, 4) if wg_n else None,
+    } if wg_n else None
+
     us_shadow = shadow(db.us_performance(), db.us_realized_series(), "us_realized")
     us_shadow_v2 = shadow(db.us2_performance(), db.us2_realized_series(), "us2_realized")
 
@@ -432,6 +447,7 @@ async def performance(request: Request) -> dict:
         "equityCurve": curve,
         "usShadow": us_shadow,
         "usShadowV2": us_shadow_v2,
+        "whaleGap": whale_gap,
     }
 
 

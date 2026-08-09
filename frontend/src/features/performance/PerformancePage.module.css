@@ -1,6 +1,48 @@
+/* The one number the page exists to show. */
+.headline {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--sp-5) var(--sp-5) var(--sp-4);
+  margin-bottom: var(--sp-4);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface-1);
+}
+.headlineLabel {
+  font-size: var(--fs-12);
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.headlineValue {
+  font-size: var(--fs-30);
+  font-weight: var(--fw-bold);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+.headlineSub {
+  font-size: var(--fs-13);
+  color: var(--text-3);
+}
+.callout {
+  margin-top: var(--sp-4);
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--border);
+  border-left: 2px solid var(--warn);
+  border-radius: var(--r-sm);
+  background: var(--surface-1);
+  font-size: var(--fs-12);
+  color: var(--text-3);
+  line-height: 1.6;
+  max-width: 78ch;
+}
+.callout strong {
+  color: var(--text-2);
+}
 .tiles {
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: var(--sp-3);
   margin-bottom: var(--sp-4);
 }

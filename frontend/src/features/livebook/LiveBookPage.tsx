@@ -27,7 +27,15 @@ export function LiveBookPage() {
       <PageHeader
         title="Live book"
         subtitle="Real positions on Polymarket US, read from the exchange."
-        actions={<Badge tone={live === 'LIVE' ? 'live' : 'paper'}>{live}</Badge>}
+        actions={
+          <>
+            {status?.maker && <Badge tone="paper">MAKER</Badge>}
+            {!!status?.pendingOrders && (
+              <Badge tone="paper">{status.pendingOrders} resting</Badge>
+            )}
+            <Badge tone={live === 'LIVE' ? 'live' : 'paper'}>{live}</Badge>
+          </>
+        }
       />
 
       {isLoading ? (

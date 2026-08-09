@@ -404,6 +404,21 @@ class Database:
                FROM positions WHERE status = 'closed'"""
         ) or {}
 
+    def whale_gap(self) -> dict:
+        """How much worse our entry was than the trader's own, on trades where
+        we captured both. This is the single biggest measured drag: we buy at
+        their CURRENT price, after the move that made the position worth having."""
+        return self._row(
+            """SELECT
+                 COUNT(*) AS n,
+                 AVG(entry_price - whale_entry) AS avg_gap,
+                 AVG(CASE WHEN whale_entry > 0
+                          THEN (entry_price - whale_entry) / whale_entry END) AS avg_pct,
+                 SUM(CASE WHEN entry_price > whale_entry THEN 1 ELSE 0 END) AS worse
+               FROM positions
+               WHERE whale_entry IS NOT NULL AND whale_entry > 0"""
+        ) or {}
+
     def realized_series(self) -> list[dict]:
         """Closed trades oldest-first — for the cumulative equity curve."""
         return self._rows(
