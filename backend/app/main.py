@@ -56,12 +56,14 @@ async def lifespan(app: FastAPI):
                 max_usd_per_order=settings.live_max_usd_per_order,
                 slippage_bips=settings.live_slippage_bips,
                 dry_run=settings.live_dry_run,
+                maker=settings.live_maker,
             )
             log.warning(
                 "LIVE execution armed — Polymarket US, max $%.2f/order, %d bips slippage%s",
                 settings.live_max_usd_per_order,
                 settings.live_slippage_bips,
-                ", DRY RUN (orders previewed, not sent)" if settings.live_dry_run else "",
+                (", DRY RUN (orders previewed, not sent)" if settings.live_dry_run else "")
+                + (", MAKER (resting orders, no spread crossed)" if settings.live_maker else ""),
             )
         except Exception as exc:  # noqa: BLE001
             log.error("LIVE_TRADING is on but the live executor could not start: %s", exc)

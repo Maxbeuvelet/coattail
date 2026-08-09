@@ -25,6 +25,14 @@ from app.db.repo import Database
 log = logging.getLogger("copybot.executor")
 
 
+def _num_or_none(v) -> float | None:
+    try:
+        f = float(v)
+        return f if f > 0 else None
+    except (TypeError, ValueError):
+        return None
+
+
 class Executor(ABC):
     """Same surface for paper and live, so the engine is execution-agnostic."""
 
@@ -60,6 +68,9 @@ class PaperExecutor(Executor):
             "entry_price": round(price, 4),
             "shares": shares,
             "stake_usd": round(stake_usd, 2),
+            # What the trader we copy actually paid. We fill at their CURRENT
+            # price, which is usually worse; storing both lets us measure it.
+            "whale_entry": _num_or_none(trader_pos.get("avgPrice")),
         }
         pid = db.insert_position(position)
         position["id"] = pid
@@ -145,6 +156,7 @@ class LiveExecutor(Executor):
         max_usd_per_order: float = 5.0,
         slippage_bips: int = 200,
         dry_run: bool = False,
+        maker: bool = False,
     ):
         if not key_id or not secret_key:
             raise ValueError(
@@ -163,6 +175,12 @@ class LiveExecutor(Executor):
         self.max_usd_per_order = float(max_usd_per_order)
         self.slippage_bips = int(slippage_bips)
         self.dry_run = bool(dry_run)
+        # Maker mode posts passively instead of crossing the spread. Taker fees
+        # are +6% x (1-p) of stake; the maker rebate is -1.25% x (1-p). At a
+        # 0.50 contract that swing is 3.6% of stake, plus the half-spread saved.
+        # The cost is that a resting order only fills when someone chooses to
+        # hit it, which skews toward the price moving against us.
+        self.maker = bool(maker)
         self.mode = "LIVE-DRYRUN" if dry_run else "LIVE"
 
     # ── helpers ──────────────────────────────────────────────
@@ -288,10 +306,16 @@ class LiveExecutor(Executor):
                     f"insufficient buying power: ${bp:.2f} available, order needs ${cost:.2f}"
                 )
 
+        intent = "ORDER_INTENT_BUY_LONG" if buy_yes else "ORDER_INTENT_BUY_SHORT"
+        if self.maker:
+            return self._post_maker(
+                db, trader_pos, name, slug, buy_yes, intent, quantity, predicted
+            )
+
         params = {
             "marketSlug": slug,
             # LONG buys the YES side of the proposition, SHORT buys the NO side.
-            "intent": "ORDER_INTENT_BUY_LONG" if buy_yes else "ORDER_INTENT_BUY_SHORT",
+            "intent": intent,
             "type": "ORDER_TYPE_LIMIT",
             "price": self._amount(wire_price),
             "quantity": quantity,
@@ -329,6 +353,7 @@ class LiveExecutor(Executor):
             "entry_price": round(cost_per_contract, 4),
             "shares": round(shares, 4),
             "stake_usd": round(shares * cost_per_contract, 2),
+            "whale_entry": _num_or_none(trader_pos.get("avgPrice")),
         }
         pid = db.insert_position(position)
         position["id"] = pid
@@ -357,6 +382,104 @@ class LiveExecutor(Executor):
         log.warning("LIVE FILL %s %s @ %.4f (predicted %.4f, slip %+.4f, fee %.4f)",
                     slug, side, cost_per_contract, predicted, slip, fees)
         return position
+
+    # ── maker mode ───────────────────────────────────────────
+    def _post_maker(
+        self, db: Database, trader_pos: dict, name: str, slug: str, buy_yes: bool,
+        intent: str, quantity: int, predicted: float,
+    ) -> dict:
+        """Rest a passive order at the touch instead of crossing the spread.
+
+        `participateDontInitiate` makes the venue reject the order outright if it
+        would match immediately, which is what guarantees maker treatment — and
+        therefore the rebate rather than the 6%x(1-p) taker fee.
+
+        The order does NOT fill now, so no position exists yet. We record it as
+        'pending'; the engine reconciles it each tick and promotes it only when
+        the exchange says it filled.
+        """
+        bid, ask = self._book(slug)
+        if bid is None or ask is None:
+            raise SkipTrade(f"no book for {slug}")
+        # Join the side we are buying, without crossing: buying YES rests at the
+        # bid; buying NO means selling YES, which rests at the ask.
+        wire = bid if buy_yes else ask
+        wire = min(0.99, max(0.01, round(wire, 2)))
+        our_cost = wire if buy_yes else (1.0 - wire)
+        if our_cost * quantity > self.max_usd_per_order + 1e-9:
+            quantity = int(self.max_usd_per_order // our_cost)
+        if quantity < 1:
+            raise SkipTrade("maker order below one contract")
+
+        params = {
+            "marketSlug": slug,
+            "intent": intent,
+            "type": "ORDER_TYPE_LIMIT",
+            "price": self._amount(wire),
+            "quantity": quantity,
+            # Rest on the book rather than expire — it is cancelled next tick if
+            # it has not filled, so it never lingers stale.
+            "tif": "TIME_IN_FORCE_GOOD_TILL_CANCEL",
+            "participateDontInitiate": True,
+            "manualOrderIndicator": "MANUAL_ORDER_INDICATOR_AUTOMATIC",
+        }
+        if self.dry_run:
+            raise DryRunOrder(
+                f"would REST {quantity} {'YES' if buy_yes else 'NO'} on {slug} @ {wire:.2f} — not sent"
+            )
+        resp = self.client.orders.create(params)
+        reason = self._reject_reason(resp)
+        order_id = str(resp.get("id") or "")
+        if reason or not order_id:
+            raise SkipTrade(f"maker order not accepted: {reason or 'no order id'}")
+
+        # It may have filled instantly anyway (a resting order can be hit in the
+        # same breath). Book it now if so; otherwise carry it as pending.
+        fill_price, shares, fees = self._fill(resp)
+        from datetime import datetime, timezone
+        position = {
+            "wallet": trader_pos["_wallet"], "name": name, "asset": trader_pos["asset"],
+            "condition_id": trader_pos.get("conditionId", ""), "title": trader_pos["title"],
+            "outcome": trader_pos["outcome"], "event_slug": trader_pos.get("eventSlug", ""),
+            "entry_price": round(our_cost, 4), "shares": float(quantity),
+            "stake_usd": round(our_cost * quantity, 2),
+            "whale_entry": _num_or_none(trader_pos.get("avgPrice")),
+            "order_id": order_id,
+            "order_placed_at": datetime.now(timezone.utc).isoformat(),
+        }
+        filled = shares > 0 and fill_price > 0
+        pid = db.insert_position(position, status="open" if filled else "pending")
+        position["id"] = pid
+        position["pending"] = not filled
+        db.record_live_fill(
+            pid, order_id=order_id, slug=slug, predicted=predicted or None,
+            actual=round(our_cost, 4), shares=float(quantity), fees=round(fees, 4),
+            side="YES" if buy_yes else "NO",
+        )
+        db.log(
+            "copy_open",
+            f"LIVE {'maker FILLED' if filled else 'maker RESTING'} {name}: "
+            f"{quantity} {'YES' if buy_yes else 'NO'} @ {our_cost:.3f} on {slug}",
+            wallet=position["wallet"], name=name, title=position["title"],
+            outcome=position["outcome"], amount=position["stake_usd"],
+        )
+        log.warning("MAKER %s %s %d @ %.3f (order %s)",
+                    'FILLED' if filled else 'RESTING', slug, quantity, our_cost, order_id)
+        return position
+
+    def order_state(self, order_id: str) -> dict | None:
+        """Current state of a resting order, for pending reconciliation."""
+        try:
+            return self.client.orders.retrieve(order_id) or None
+        except Exception as exc:  # noqa: BLE001
+            log.debug("order lookup failed %s: %s", order_id, exc)
+            return None
+
+    def cancel(self, order_id: str, slug: str) -> None:
+        try:
+            self.client.orders.cancel(order_id, {"marketSlug": slug})
+        except Exception as exc:  # noqa: BLE001
+            log.debug("cancel failed %s: %s", order_id, exc)
 
     def close_copy(self, db: Database, position: dict, exit_price: float) -> float:
         """Close the whole position with an explicit marketable limit order.

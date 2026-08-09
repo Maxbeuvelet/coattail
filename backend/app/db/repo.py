@@ -62,6 +62,14 @@ class Database:
             ("live_fees", "REAL"),
             ("live_exit_fill", "REAL"),
             ("live_exit_fees", "REAL"),
+            # What the trader we copy actually paid, captured at copy time.
+            # We buy at their CURRENT price, which is usually worse — median 7c
+            # on a 50c contract. Without storing this we cannot test whether the
+            # gap predicts the outcome.
+            ("whale_entry", "REAL"),
+            # Resting maker orders: the position exists before it is filled.
+            ("order_id", "TEXT"),
+            ("order_placed_at", "TEXT"),
         ):
             if col not in have:
                 self._exec(f"ALTER TABLE positions ADD COLUMN {col} {decl}")
@@ -130,28 +138,52 @@ class Database:
         return self._rows("SELECT * FROM positions WHERE status = 'open' ORDER BY opened_at DESC")
 
     def open_position(self, wallet: str, asset: str) -> dict | None:
+        """Includes resting orders — otherwise we would re-queue the same trade
+        on every tick while the first order is still working."""
         return self._row(
-            "SELECT * FROM positions WHERE status = 'open' AND wallet = ? AND asset = ?",
+            """SELECT * FROM positions
+               WHERE status IN ('open','pending') AND wallet = ? AND asset = ?""",
             (wallet, asset),
         )
 
     def count_open(self) -> int:
-        row = self._row("SELECT COUNT(*) AS n FROM positions WHERE status = 'open'")
+        row = self._row(
+            "SELECT COUNT(*) AS n FROM positions WHERE status IN ('open','pending')"
+        )
         return int(row["n"]) if row else 0
 
-    def insert_position(self, p: dict[str, Any]) -> int:
+    def insert_position(self, p: dict[str, Any], status: str = "open") -> int:
         cur = self._exec(
             """INSERT INTO positions
                (wallet, name, asset, condition_id, title, outcome,
-                entry_price, shares, stake_usd, cur_price, status, opened_at, event_slug)
-               VALUES (?,?,?,?,?,?,?,?,?,?, 'open', ?, ?)""",
+                entry_price, shares, stake_usd, cur_price, status, opened_at,
+                event_slug, whale_entry, order_id, order_placed_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (
                 p["wallet"], p["name"], p["asset"], p.get("condition_id"), p["title"],
                 p["outcome"], p["entry_price"], p["shares"], p["stake_usd"],
-                p["entry_price"], _now(), p.get("event_slug"),
+                p["entry_price"], status, _now(), p.get("event_slug"),
+                p.get("whale_entry"), p.get("order_id"), p.get("order_placed_at"),
             ),
         )
         return int(cur.lastrowid)
+
+    # ── resting (maker) orders ───────────────────────────────
+    def pending_positions(self) -> list[dict]:
+        return self._rows("SELECT * FROM positions WHERE status = 'pending'")
+
+    def promote_pending(self, pid: int, entry: float, shares: float, stake: float) -> None:
+        """A resting order filled — it is a real position now."""
+        self._exec(
+            """UPDATE positions
+               SET status = 'open', entry_price = ?, cur_price = ?, shares = ?, stake_usd = ?
+               WHERE id = ?""",
+            (entry, entry, shares, stake, pid),
+        )
+
+    def drop_pending(self, pid: int) -> None:
+        """Order cancelled or expired without filling — no position ever existed."""
+        self._exec("DELETE FROM positions WHERE id = ? AND status = 'pending'", (pid,))
 
     # ── US shadow book (comparison: same trades priced on Polymarket US) ──
     def set_us_entry(self, position_id: int, us_entry: float) -> None:

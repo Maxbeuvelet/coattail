@@ -39,6 +39,12 @@ class Settings(BaseSettings):
     # on for the first run.
     live_dry_run: bool = True
 
+    # Post passively (maker) instead of crossing the spread (taker). Taker fees
+    # are 6% x (1-p) of stake; makers get a 1.25% x (1-p) rebate, and you save
+    # the half-spread. The cost is that a resting order only fills when someone
+    # chooses to hit it, which skews toward the price moving against you.
+    live_maker: bool = False
+
     # ── Wallet / CLOB creds (international book — unused by US) ──
     polygon_private_key: str = ""
     clob_api_key: str = ""

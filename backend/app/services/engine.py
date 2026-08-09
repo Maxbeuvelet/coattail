@@ -225,6 +225,47 @@ class FollowEngine:
         return None
 
     # ── US shadow book ───────────────────────────────────────
+    async def _reconcile_pending(self, max_age_s: int = 120) -> tuple[int, int]:
+        """Resolve resting maker orders: (filled, cancelled).
+
+        A passive order does not fill on placement, so the position is carried as
+        'pending' until the exchange says otherwise. Anything still working after
+        `max_age_s` is cancelled — by then the trade we were copying is stale,
+        and a forgotten order could fill hours later into a market that has moved.
+        """
+        pend = self.db.pending_positions()
+        if not pend:
+            return 0, 0
+        now = datetime.now(timezone.utc)
+        filled = cancelled = 0
+        for p in pend:
+            oid = p.get("order_id")
+            if not oid:
+                self.db.drop_pending(p["id"]); continue
+            st = await asyncio.to_thread(self.executor.order_state, oid)
+            state = str((st or {}).get("state") or "")
+            cum = float((st or {}).get("cumQuantity") or 0)
+            if cum > 0:
+                avg = float(((st or {}).get("avgPx") or {}).get("value") or 0)
+                # Quotes are YES-side; a NO position costs 1 - avg per contract.
+                cost = (1.0 - avg) if p.get("live_side") == "NO" else avg
+                if cost > 0:
+                    self.db.promote_pending(p["id"], round(cost, 4), cum, round(cum * cost, 2))
+                    filled += 1
+                    log.warning("maker order filled: %s %g @ %.3f", p["live_slug"], cum, cost)
+                    continue
+            if state in ("ORDER_STATE_CANCELED", "ORDER_STATE_REJECTED", "ORDER_STATE_EXPIRED"):
+                self.db.drop_pending(p["id"]); cancelled += 1; continue
+            try:
+                age = (now - datetime.fromisoformat(p["order_placed_at"])).total_seconds()
+            except Exception:  # noqa: BLE001
+                age = max_age_s + 1
+            if age > max_age_s:
+                await asyncio.to_thread(self.executor.cancel, oid, p["live_slug"])
+                self.db.drop_pending(p["id"]); cancelled += 1
+                log.warning("maker order expired unfilled after %.0fs: %s", age, p["live_slug"])
+        return filled, cancelled
+
     async def _reconcile_settled(self) -> int:
         """Close local positions whose Polymarket US market has already resolved.
 
@@ -404,6 +445,16 @@ class FollowEngine:
                 closed += await self._reconcile_settled()
             except Exception as exc:  # noqa: BLE001
                 log.warning("settlement reconcile failed: %s", exc)
+            # Then resting maker orders, so a fill counts as opened this tick
+            # and an expired one frees its slot before we queue anything new.
+            if getattr(self.executor, "maker", False):
+                try:
+                    f, x = await self._reconcile_pending()
+                    opened += f
+                    if f or x:
+                        log.info("maker orders: %d filled, %d cancelled", f, x)
+                except Exception as exc:  # noqa: BLE001
+                    log.warning("pending reconcile failed: %s", exc)
         us_budget = _US_ENTRY_BUDGET_PER_TICK
         us_mark_budget = _US_MARK_BUDGET_PER_TICK
 
@@ -519,6 +570,11 @@ class FollowEngine:
                             log.warning("open failed (%s): %s", p.get("title", "")[:48], exc)
                             self.db.log("skip", f"order failed: {exc}", wallet=wallet,
                                         name=name, title=p["title"], outcome=p["outcome"])
+                            self.db.mark_seen(wallet, asset)
+                            continue
+                        if newpos.get("pending"):
+                            # Resting, not filled. It becomes a position only
+                            # when the exchange fills it.
                             self.db.mark_seen(wallet, asset)
                             continue
                         opened += 1
