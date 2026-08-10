@@ -350,6 +350,45 @@ async def us_book(request: Request) -> dict:
     }
 
 
+@router.get("/skipped")
+async def skipped(request: Request) -> dict:
+    """Did declining these trades actually help?
+
+    A filter can only be judged against what it rejected. This compares the
+    counterfactual return of declined trades against the realized return of
+    taken ones — if the skipped set did BETTER, the filter is costing money.
+    """
+    db = request.app.state.db
+    by_reason = []
+    for row in db.skip_stats():
+        by_reason.append({
+            "reason": row["reason"],
+            "count": int(row["n"] or 0),
+            "resolved": int(row["resolved"] or 0),
+            "avgReturn": round(float(row["avg_return"]), 4) if row["avg_return"] is not None else None,
+            "winRate": round(float(row["win_rate"]), 4) if row["win_rate"] is not None else None,
+            "avgEntryGap": round(float(row["avg_gap"]), 4) if row["avg_gap"] is not None else None,
+        })
+
+    # The comparison that matters: taken vs declined, on the same measure.
+    taken = [
+        (p["realized_pnl"] or 0) / p["stake_usd"]
+        for p in db.closed_positions(500) if p["stake_usd"]
+    ]
+    resolved = [r for r in by_reason if r["resolved"]]
+    skipped_ret = [
+        r["avgReturn"] * r["resolved"] for r in resolved if r["avgReturn"] is not None
+    ]
+    skipped_n = sum(r["resolved"] for r in resolved if r["avgReturn"] is not None)
+    return {
+        "byReason": by_reason,
+        "takenCount": len(taken),
+        "takenAvgReturn": round(sum(taken) / len(taken), 4) if taken else None,
+        "skippedResolved": skipped_n,
+        "skippedAvgReturn": round(sum(skipped_ret) / skipped_n, 4) if skipped_n else None,
+    }
+
+
 @router.get("/live-book")
 async def live_book(request: Request) -> dict:
     """Real money: what the Polymarket US account actually holds.

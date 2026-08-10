@@ -47,6 +47,49 @@ _AUTOPILOT_SYNC_SECONDS = 300
 _FAST_MAX_DAYS = 5.0
 
 
+class SkipReason:
+    """Machine-readable codes for why a trade was declined.
+
+    Free text is unanalysable — "trade skipped" tells you nothing later. Every
+    decline carries one of these so the counterfactual book can be grouped by
+    cause and each filter judged on its own record.
+    """
+    NO_US_MARKET = "NO_US_MARKET"                 # no confident Polymarket US match
+    PRICE_OUTSIDE_BAND = "PRICE_OUTSIDE_BAND"     # outside the configured price band
+    PORTFOLIO_FULL = "PORTFOLIO_FULL"             # max_open_positions reached
+    ENGINE_PAUSED = "ENGINE_PAUSED"
+    KILL_SWITCH = "KILL_SWITCH"                   # daily loss limit hit
+    RESOLVES_TOO_FAR = "RESOLVES_TOO_FAR"         # fast mode, resolution too distant
+    INSUFFICIENT_CASH = "INSUFFICIENT_CASH"
+    ALREADY_HELD = "ALREADY_HELD"
+    ORDER_FAILED = "ORDER_FAILED"                 # venue rejected or no fill
+    DRY_RUN = "DRY_RUN"
+
+    @staticmethod
+    def classify(text: str) -> str:
+        """Map an engine/executor message onto a code."""
+        t = (text or "").lower()
+        if "no matching" in t or "no confidently matched" in t:
+            return SkipReason.NO_US_MARKET
+        if "outside band" in t:
+            return SkipReason.PRICE_OUTSIDE_BAND
+        if "portfolio full" in t:
+            return SkipReason.PORTFOLIO_FULL
+        if "kill switch" in t:
+            return SkipReason.KILL_SWITCH
+        if "paused" in t:
+            return SkipReason.ENGINE_PAUSED
+        if "resolves" in t:
+            return SkipReason.RESOLVES_TOO_FAR
+        if "cash" in t or "buying power" in t or "minimum" in t or "one contract" in t:
+            return SkipReason.INSUFFICIENT_CASH
+        if "already hold" in t:
+            return SkipReason.ALREADY_HELD
+        if "dry run" in t or "not sent" in t:
+            return SkipReason.DRY_RUN
+        return SkipReason.ORDER_FAILED
+
+
 def _days_until(end_date: str | None) -> float | None:
     """Days from now until a market's resolution. None if unparseable."""
     if not end_date:
@@ -308,6 +351,24 @@ class FollowEngine:
             closed += 1
         return closed
 
+    def _log_skip(self, reason_text: str, *, wallet: str, name: str, p: dict,
+                  our_price: float | None = None) -> None:
+        """Record a declined trade in both the audit log and the counterfactual
+        book, so it can be judged later on what it would have done."""
+        code = SkipReason.classify(reason_text)
+        self.db.log("skip", reason_text, wallet=wallet, name=name,
+                    title=p.get("title"), outcome=p.get("outcome"))
+        try:
+            self.db.record_skip(
+                wallet=wallet, name=name, asset=p.get("asset") or "",
+                title=p.get("title") or "", outcome=p.get("outcome") or "",
+                event_slug=p.get("eventSlug"), reason=code, detail=reason_text[:200],
+                whale_entry=float(p.get("avgPrice") or 0) or None,
+                our_price=our_price if our_price is not None else (float(p.get("curPrice") or 0) or None),
+            )
+        except Exception as exc:  # noqa: BLE001
+            log.debug("skip record failed: %s", exc)
+
     async def _resolve_us_market(self, trader_pos: dict) -> dict | None:
         """Which Polymarket US market and side would express this trade, and at
         what price? Returns None when the matcher isn't confident — the same
@@ -471,6 +532,22 @@ class FollowEngine:
 
             current_assets = {p["asset"] for p in trader_positions if p.get("asset")}
 
+            # Counterfactual book: mark the ones the trader still holds, and
+            # resolve the ones they have left. Same lifecycle as a real copy, so
+            # taken and declined trades are measured the same way.
+            live_px = {p["asset"]: float(p.get("curPrice") or 0)
+                       for p in trader_positions if p.get("asset")}
+            for sk in self.db.open_skips():
+                if sk["wallet"] != wallet:
+                    continue
+                px = live_px.get(sk["asset"])
+                if px:
+                    self.db.mark_skip(sk["id"], px)
+                elif sk["asset"] not in current_assets:
+                    # They exited — close the counterfactual at its last mark,
+                    # which is what we would have got had we been in it.
+                    self.db.close_skip(sk["id"], float(sk["cur_price"] or sk["our_price"] or 0))
+
             # ── Exits: our open copies of this trader they no longer hold ──
             # When follow_exits is off we ignore the trader leaving and hold to
             # resolution instead. Measured on the live book: copies that followed
@@ -528,8 +605,7 @@ class FollowEngine:
                     stake = self._stake(follow, acct["cash"], r, acct["equity"])
                     if stake < 1:
                         if newly:
-                            self.db.log("skip", "insufficient cash", wallet=wallet, name=name,
-                                        title=p["title"], outcome=p["outcome"])
+                            self._log_skip("insufficient cash", wallet=wallet, name=name, p=p)
                     else:
                         # Live venues can only copy a trade whose Polymarket US
                         # market we can identify with confidence. Resolve it
@@ -539,11 +615,8 @@ class FollowEngine:
                             p["_us"] = await self._resolve_us_market(p)
                             if not p["_us"]:
                                 if newly:
-                                    self.db.log(
-                                        "skip", "no matching Polymarket US market",
-                                        wallet=wallet, name=name,
-                                        title=p["title"], outcome=p["outcome"],
-                                    )
+                                    self._log_skip("no matching Polymarket US market",
+                                                   wallet=wallet, name=name, p=p)
                                 self.db.mark_seen(wallet, asset)
                                 continue
                         try:
@@ -552,8 +625,7 @@ class FollowEngine:
                             # Not a failure: the venue accepted the order shape
                             # and we chose not to send it. No position exists.
                             log.warning("DRY RUN %s: %s", p.get("title", "")[:44], dry)
-                            self.db.log("skip", f"dry run — {dry}", wallet=wallet,
-                                        name=name, title=p["title"], outcome=p["outcome"])
+                            self._log_skip(f"dry run — {dry}", wallet=wallet, name=name, p=p)
                             self.db.mark_seen(wallet, asset)
                             continue
                         except SkipTrade as skip:
@@ -561,15 +633,13 @@ class FollowEngine:
                             # match). Routine, so it must not inflate the error
                             # count the dashboard shows.
                             if newly:
-                                self.db.log("skip", str(skip), wallet=wallet, name=name,
-                                            title=p["title"], outcome=p["outcome"])
+                                self._log_skip(str(skip), wallet=wallet, name=name, p=p)
                             self.db.mark_seen(wallet, asset)
                             continue
                         except Exception as exc:  # noqa: BLE001
                             errors += 1
                             log.warning("open failed (%s): %s", p.get("title", "")[:48], exc)
-                            self.db.log("skip", f"order failed: {exc}", wallet=wallet,
-                                        name=name, title=p["title"], outcome=p["outcome"])
+                            self._log_skip(f"order failed: {exc}", wallet=wallet, name=name, p=p)
                             self.db.mark_seen(wallet, asset)
                             continue
                         if newpos.get("pending"):
@@ -582,8 +652,7 @@ class FollowEngine:
                             us_budget -= 1
                             await self._shadow_open(newpos, p)
                 elif newly:
-                    self.db.log("skip", reason, wallet=wallet, name=name,
-                                title=p["title"], outcome=p["outcome"])
+                    self._log_skip(reason, wallet=wallet, name=name, p=p)
 
                 self.db.mark_seen(wallet, asset)
 

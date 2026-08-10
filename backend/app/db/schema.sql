@@ -63,6 +63,35 @@ CREATE TABLE IF NOT EXISTS config (
   value TEXT NOT NULL
 );
 
+-- Counterfactual book: trades the engine DECLINED, tracked as if we had taken
+-- them. Without this, a filter can only be judged by what it let through — and
+-- a filter that removes losers is indistinguishable from one that removes
+-- winners. Each row follows the same lifecycle as a real copy (marked while the
+-- trader holds it, resolved when they exit) so the two are directly comparable.
+CREATE TABLE IF NOT EXISTS skipped (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  ts           TEXT NOT NULL,
+  wallet       TEXT NOT NULL,
+  name         TEXT,
+  asset        TEXT NOT NULL,
+  title        TEXT,
+  outcome      TEXT,
+  event_slug   TEXT,
+  reason       TEXT NOT NULL,     -- machine-readable code, see engine.SkipReason
+  detail       TEXT,              -- human-readable specifics
+  whale_entry  REAL,              -- what the trader paid
+  our_price    REAL,              -- what we would have paid, had we taken it
+  cur_price    REAL,              -- last mark
+  status       TEXT NOT NULL DEFAULT 'open',   -- 'open' | 'closed'
+  exit_price   REAL,
+  closed_at    TEXT,
+  -- Return on stake had we taken it, as a fraction. Size-independent, so it is
+  -- comparable against real trades whatever they were staked at.
+  hypo_return  REAL
+);
+CREATE INDEX IF NOT EXISTS idx_skipped_open ON skipped (status, wallet, asset);
+CREATE INDEX IF NOT EXISTS idx_skipped_reason ON skipped (reason);
+
 -- Every (trader, asset) the engine has already evaluated, so a skipped
 -- position isn't re-logged every tick and genuine new entries are detectable.
 CREATE TABLE IF NOT EXISTS seen (

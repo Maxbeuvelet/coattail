@@ -444,6 +444,65 @@ class Database:
         )
         return float(row["s"]) if row else 0.0
 
+    # ── counterfactual book (trades we declined) ─────────────
+    def record_skip(
+        self, *, wallet: str, name: str, asset: str, title: str, outcome: str,
+        event_slug: str | None, reason: str, detail: str,
+        whale_entry: float | None, our_price: float | None,
+    ) -> None:
+        """Log a declined trade and start tracking what it would have done.
+
+        One row per (wallet, asset) — the engine re-evaluates the same position
+        every tick, and re-logging it would flood the table and bias any average
+        toward long-held positions.
+        """
+        if self._row(
+            "SELECT 1 FROM skipped WHERE wallet = ? AND asset = ? AND status = 'open'",
+            (wallet, asset),
+        ):
+            return
+        self._exec(
+            """INSERT INTO skipped
+               (ts, wallet, name, asset, title, outcome, event_slug, reason, detail,
+                whale_entry, our_price, cur_price, status)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?, 'open')""",
+            (_now(), wallet, name, asset, title, outcome, event_slug, reason, detail,
+             whale_entry, our_price, our_price),
+        )
+
+    def open_skips(self) -> list[dict]:
+        return self._rows("SELECT * FROM skipped WHERE status = 'open'")
+
+    def mark_skip(self, skip_id: int, cur_price: float) -> None:
+        self._exec("UPDATE skipped SET cur_price = ? WHERE id = ?", (cur_price, skip_id))
+
+    def close_skip(self, skip_id: int, exit_price: float) -> None:
+        """Resolve a counterfactual at the same moment the real bot would have
+        exited — when the trader drops the position."""
+        self._exec(
+            """UPDATE skipped
+               SET status = 'closed', exit_price = ?, closed_at = ?,
+                   hypo_return = CASE WHEN our_price > 0
+                                      THEN (? - our_price) / our_price END
+               WHERE id = ?""",
+            (exit_price, _now(), exit_price, skip_id),
+        )
+
+    def skip_stats(self) -> list[dict]:
+        """Per-reason counterfactual performance — did declining actually help?"""
+        return self._rows(
+            """SELECT reason,
+                      COUNT(*) AS n,
+                      SUM(status = 'closed') AS resolved,
+                      AVG(CASE WHEN status = 'closed' THEN hypo_return END) AS avg_return,
+                      AVG(CASE WHEN status = 'closed' AND hypo_return > 0 THEN 1.0
+                               WHEN status = 'closed' THEN 0.0 END) AS win_rate,
+                      AVG(our_price - whale_entry) AS avg_gap
+               FROM skipped
+               GROUP BY reason
+               ORDER BY n DESC"""
+        )
+
     # ── activity ─────────────────────────────────────────────
     def log(
         self,
