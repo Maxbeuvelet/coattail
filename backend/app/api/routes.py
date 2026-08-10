@@ -50,6 +50,7 @@ def _risk_out(r) -> dict:
         "priceBand": [r.price_band_low, r.price_band_high],
         "enginePaused": r.engine_paused,
         "followExits": r.follow_exits,
+        "maxEntryGapPct": r.max_entry_gap_pct,
     }
 
 
@@ -111,6 +112,7 @@ class SettingsPatch(BaseModel):
     priceBandHigh: float | None = Field(default=None, ge=0, le=1)
     enginePaused: bool | None = None
     followExits: bool | None = None
+    maxEntryGapPct: float | None = Field(default=None, ge=0, le=5)
     autopilotEnabled: bool | None = None
     autopilotRank: str | None = Field(default=None, pattern="^(roi|pnl|pnl_30d|churn)$")
     autopilotCount: int | None = Field(default=None, ge=1, le=25)
@@ -128,6 +130,7 @@ _PATCH_TO_FIELD = {
     "priceBandHigh": "price_band_high",
     "enginePaused": "engine_paused",
     "followExits": "follow_exits",
+    "maxEntryGapPct": "max_entry_gap_pct",
     "autopilotEnabled": "autopilot_enabled",
     "autopilotRank": "autopilot_rank",
     "autopilotCount": "autopilot_count",

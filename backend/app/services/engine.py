@@ -63,6 +63,7 @@ class SkipReason:
     INSUFFICIENT_CASH = "INSUFFICIENT_CASH"
     ALREADY_HELD = "ALREADY_HELD"
     ORDER_FAILED = "ORDER_FAILED"                 # venue rejected or no fill
+    ENTRY_GAP_TOO_WIDE = "ENTRY_GAP_TOO_WIDE"     # price ran away from the trader's
     DRY_RUN = "DRY_RUN"
 
     @staticmethod
@@ -83,6 +84,8 @@ class SkipReason:
             return SkipReason.RESOLVES_TOO_FAR
         if "cash" in t or "buying power" in t or "minimum" in t or "one contract" in t:
             return SkipReason.INSUFFICIENT_CASH
+        if "ran away" in t or "entry gap" in t:
+            return SkipReason.ENTRY_GAP_TOO_WIDE
         if "already hold" in t:
             return SkipReason.ALREADY_HELD
         if "dry run" in t or "not sent" in t:
@@ -599,6 +602,16 @@ class FollowEngine:
                     reason = "engine paused" if r.engine_paused else "daily-loss kill switch active"
                 if reason is None and fast_mode and not _is_near_term(p.get("endDate")):
                     reason = f"resolves >{int(_FAST_MAX_DAYS)}d out (fast mode)"
+                # Don't chase: the trader's edge was at THEIR price, and by the
+                # time their position is public the market has usually moved.
+                if reason is None and r.max_entry_gap_pct > 0:
+                    whale = float(p.get("avgPrice") or 0)
+                    if whale > 0 and price > whale * (1 + r.max_entry_gap_pct):
+                        reason = (
+                            f"price ran away: they paid {whale:.3f}, we would pay "
+                            f"{price:.3f} (+{100 * (price / whale - 1):.0f}%, "
+                            f"limit +{100 * r.max_entry_gap_pct:.0f}%)"
+                        )
 
                 if reason is None:
                     acct = self.account()

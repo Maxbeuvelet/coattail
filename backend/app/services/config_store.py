@@ -25,6 +25,11 @@ _RISK_FIELDS: dict[str, type] = {
     # Exits cost a second spread crossing plus taker fees, which on short holds
     # exceeds what the trader's timing is worth.
     "follow_exits": bool,
+    # Refuse to chase: skip when our price is more than this fraction above what
+    # the copied trader paid. 0 disables it. Measured across 135 of their
+    # positions, we pay more than they did on 76% of trades, median +7c on a
+    # ~50c contract — the largest single drag on the strategy.
+    "max_entry_gap_pct": float,
 }
 _AUTO_FIELDS: dict[str, type] = {
     "autopilot_enabled": bool,
@@ -48,6 +53,7 @@ class RiskView:
     price_band_high: float
     engine_paused: bool
     follow_exits: bool
+    max_entry_gap_pct: float
 
 
 @dataclass
@@ -80,6 +86,8 @@ def _validate(view: dict) -> None:
         raise ValueError("size_pct must be between 0 and 0.5")
     if view["max_open_positions"] < 1:
         raise ValueError("max_open_positions must be >= 1")
+    if not (0 <= view["max_entry_gap_pct"] <= 5):
+        raise ValueError("max_entry_gap_pct must be between 0 and 5")
     if not (0 <= view["daily_loss_kill_pct"] <= 1):
         raise ValueError("daily_loss_kill_pct must be between 0 and 1")
     lo, hi = view["price_band_low"], view["price_band_high"]
@@ -109,6 +117,11 @@ class ConfigStore:
             # Default on, so paper behaviour is unchanged. Paper exits are free;
             # only a live venue charges for them.
             "follow_exits": True,
+            # Off by default: it has a known trap. A price at or below theirs
+            # usually means the position has moved AGAINST them, so filtering
+            # for a good entry can select their losers. The counterfactual book
+            # is what settles whether it helps.
+            "max_entry_gap_pct": 0.0,
             "autopilot_enabled": False,
             "autopilot_rank": "roi",
             "autopilot_count": 5,
