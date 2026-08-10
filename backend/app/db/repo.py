@@ -280,9 +280,18 @@ class Database:
         )
 
     def open_position_by_live_slug(self, slug: str) -> dict | None:
-        """An open position already held in this Polymarket US market, if any."""
+        """A position OR a resting order already in this Polymarket US market.
+
+        Must include 'pending'. A maker order rests unfilled for up to 120s, and
+        while it did not count here the engine happily queued another order in
+        the same market on the next tick — and another. Sizes stacked well past
+        the per-order cap (a $2 order became a $10.68 position) before anything
+        filled. Every duplicate is real money.
+        """
         return self._row(
-            "SELECT * FROM positions WHERE status = 'open' AND live_slug = ?", (slug,)
+            """SELECT * FROM positions
+               WHERE status IN ('open','pending') AND live_slug = ?""",
+            (slug,),
         )
 
     def live_fills(self, limit: int = 200) -> list[dict]:
