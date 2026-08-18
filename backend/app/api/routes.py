@@ -353,6 +353,24 @@ async def us_book(request: Request) -> dict:
     }
 
 
+@router.get("/match-split")
+async def match_split(request: Request) -> dict:
+    """Trades that exist on Polymarket US vs those that don't, compared on
+    return per dollar staked. Answers whether the live bot's underperformance is
+    execution or simply a worse subset of markets."""
+    rows = []
+    for r in request.app.state.db.match_split():
+        rows.append({
+            "group": r["grp"],
+            "count": int(r["n"] or 0),
+            "avgReturn": round(float(r["avg_return"]), 4) if r["avg_return"] is not None else None,
+            "winRate": round(float(r["win_rate"]), 4) if r["win_rate"] is not None else None,
+            "avgEntryPrice": round(float(r["avg_entry"]), 4) if r["avg_entry"] is not None else None,
+            "avgWhaleGap": round(float(r["avg_gap"]), 4) if r["avg_gap"] is not None else None,
+        })
+    return {"groups": rows}
+
+
 @router.get("/skipped")
 async def skipped(request: Request) -> dict:
     """Did declining these trades actually help?

@@ -413,6 +413,32 @@ class Database:
                FROM positions WHERE status = 'closed'"""
         ) or {}
 
+    def match_split(self) -> list[dict]:
+        """Do trades that EXIST on Polymarket US perform differently?
+
+        The live bot can only take the ~34% of trades that match a US market. If
+        that subset is systematically worse than the rest, it explains the live
+        bot's 10-point win-rate gap without any execution problem at all.
+
+        Compares return ON STAKE, not dollars — the paper book compounds, so a
+        late trade is worth thousands of times an early one and dollar sums are
+        meaningless across the run. Restricted to us2_seen, i.e. trades where a
+        US lookup was actually attempted, so pre-matcher history is excluded.
+        """
+        return self._rows(
+            """SELECT
+                 CASE WHEN us2_entry IS NOT NULL THEN 'on_us' ELSE 'not_on_us' END AS grp,
+                 COUNT(*) AS n,
+                 AVG(realized_pnl / stake_usd) AS avg_return,
+                 AVG(CASE WHEN realized_pnl > 0 THEN 1.0 ELSE 0.0 END) AS win_rate,
+                 AVG(entry_price) AS avg_entry,
+                 AVG(CASE WHEN whale_entry > 0
+                          THEN (entry_price - whale_entry) / whale_entry END) AS avg_gap
+               FROM positions
+               WHERE status = 'closed' AND stake_usd > 0 AND us2_seen = 1
+               GROUP BY grp"""
+        )
+
     def whale_gap(self) -> dict:
         """How much worse our entry was than the trader's own, on trades where
         we captured both. This is the single biggest measured drag: we buy at
