@@ -562,11 +562,24 @@ def _strict_match(event: dict, outcome: str, title: str) -> dict | None:
             buy_yes = want_true == yes_gives
             price = _cost(m, buy_yes)
             if price is not None:
+                # Passive alternative: rest at the touch instead of crossing it.
+                # A YES buy joins the bid; a NO buy is a YES sale, so it joins
+                # the ask. bid/ask are carried through so a later tick can tell
+                # whether such an order would actually have been hit.
+                bid, ask = _bid_ask(m)
+                wire = bid if buy_yes else ask
+                mcost = None
+                if wire is not None and 0.0 < wire < 1.0:
+                    mcost = wire if buy_yes else (1.0 - wire)
                 hits[question] = {
                     "price": price,
                     "question": question,
                     "slug": str(m.get("slug") or "") or None,
                     "buy_yes": buy_yes,
+                    "maker_cost": mcost,
+                    "maker_wire": wire,
+                    "bid": bid,
+                    "ask": ask,
                 }
             break  # one proposition per market
 
