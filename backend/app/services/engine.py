@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import random
 from datetime import datetime, timezone
 
 import httpx
@@ -312,6 +313,47 @@ class FollowEngine:
                 log.warning("maker order expired unfilled after %.0fs: %s", age, p["live_slug"])
         return filled, cancelled
 
+    async def _settle_held(self) -> int:
+        """Close hold-arm positions once their market resolves.
+
+        Runs on the paper bot too, which otherwise has no settlement path — its
+        only exit is the trader leaving, which is precisely the behaviour the
+        hold arm exists to avoid. Without this the experiment could never
+        produce a result on the free instrument.
+
+        Settlement is YES-side, so a NO position pays out on a 0 resolution.
+        """
+        held = self.db.held_positions()
+        if not held:
+            return 0
+        closed = 0
+        for pos in held:
+            try:
+                s = await self._us_client.get(
+                    f"https://gateway.polymarket.us/v1/markets/{pos['us2_slug']}/settlement"
+                )
+                if s.status_code != 200:
+                    continue          # not resolved yet
+                val = (s.json() or {}).get("settlement")
+            except Exception:  # noqa: BLE001
+                continue
+            if val is None:
+                continue
+            yes = 1.0 if float(val) >= 0.5 else 0.0
+            price = yes if pos.get("us2_side") != "NO" else 1.0 - yes
+            realized = round(pos["shares"] * price - pos["stake_usd"], 2)
+            self.db.close_position(pos["id"], price, realized)
+            self.db.set_intl_exit(pos["id"], float(pos.get("cur_price") or 0))
+            self.db.log(
+                "copy_exit",
+                f"HELD to settlement — {pos['name']} @ {price:.0f} · "
+                f"realized {'+' if realized >= 0 else ''}${realized:,.2f}",
+                wallet=pos["wallet"], name=pos["name"], title=pos["title"],
+                outcome=pos["outcome"], amount=realized,
+            )
+            closed += 1
+        return closed
+
     async def _reconcile_settled(self) -> int:
         """Close local positions whose Polymarket US market has already resolved.
 
@@ -419,6 +461,12 @@ class FollowEngine:
         # Maker shadow: what a passive order would have cost instead of crossing.
         if q.maker_cost and q.maker_wire:
             self.db.set_maker_shadow(position["id"], round(q.maker_cost, 4), round(q.maker_wire, 4))
+        if q.slug:
+            self.db.set_us2_slug(position["id"], q.slug, "YES" if q.buy_yes else "NO")
+        # Randomised exit arm, assigned now — before anything about the outcome
+        # is knowable. This is what makes the comparison valid.
+        if self.cfg.risk().exit_experiment and q.slug:
+            self.db.set_exit_rule(position["id"], random.choice(("follow", "hold")))
 
     async def _shadow_mark(self, position: dict, trader_pos: dict) -> None:
         """Refresh the US marks for an open shadowed position, alongside the
@@ -512,6 +560,14 @@ class FollowEngine:
         fast_mode = ac.autopilot_enabled and ac.autopilot_rank == "churn"
         opened = closed = marked = errors = 0
 
+        # Hold-arm positions settle on both bots — the paper book has no other
+        # way to close them, and the experiment needs both arms to resolve.
+        if r.exit_experiment:
+            try:
+                closed += await self._settle_held()
+            except Exception as exc:  # noqa: BLE001
+                log.warning("held settlement failed: %s", exc)
+
         # Settled markets first: the venue has already paid, so clearing them
         # frees the book before we consider anything new. Counters must exist
         # before this runs.
@@ -570,6 +626,9 @@ class FollowEngine:
             # ways while the price barely moves. Copies held to settlement
             # averaged +9.1%. Settlement reconciliation closes them instead.
             for pos in (self.db.open_positions() if r.follow_exits else []):
+                # Held arm rides to resolution by design; settlement closes it.
+                if pos.get("exit_rule") == "hold":
+                    continue
                 if pos["wallet"] == wallet and pos["asset"] not in current_assets:
                     try:
                         self.db.set_intl_exit(pos["id"], float(pos["cur_price"]))

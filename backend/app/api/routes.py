@@ -50,6 +50,7 @@ def _risk_out(r) -> dict:
         "priceBand": [r.price_band_low, r.price_band_high],
         "enginePaused": r.engine_paused,
         "followExits": r.follow_exits,
+        "exitExperiment": r.exit_experiment,
         "maxEntryGapPct": r.max_entry_gap_pct,
     }
 
@@ -112,6 +113,7 @@ class SettingsPatch(BaseModel):
     priceBandHigh: float | None = Field(default=None, ge=0, le=1)
     enginePaused: bool | None = None
     followExits: bool | None = None
+    exitExperiment: bool | None = None
     maxEntryGapPct: float | None = Field(default=None, ge=0, le=5)
     autopilotEnabled: bool | None = None
     autopilotRank: str | None = Field(default=None, pattern="^(roi|pnl|pnl_30d|churn)$")
@@ -130,6 +132,7 @@ _PATCH_TO_FIELD = {
     "priceBandHigh": "price_band_high",
     "enginePaused": "engine_paused",
     "followExits": "follow_exits",
+    "exitExperiment": "exit_experiment",
     "maxEntryGapPct": "max_entry_gap_pct",
     "autopilotEnabled": "autopilot_enabled",
     "autopilotRank": "autopilot_rank",
@@ -350,6 +353,38 @@ async def us_book(request: Request) -> dict:
         "closedCount": len(closed_rows),
         "equity": round(bankroll + realized + unrealized, 2),
         "bankroll": bankroll,
+    }
+
+
+@router.get("/exit-experiment")
+async def exit_experiment(request: Request) -> dict:
+    """Randomised A/B on the exit rule: follow the trader out, or hold to
+    resolution?
+
+    Worth roughly +/-20 points per trade and never cleanly tested — every
+    earlier attempt compared positions the trader CHOSE to hold against ones
+    they chose to exit, which measures their selection, not our policy. Here the
+    arm is drawn at entry, before anything about the outcome is knowable.
+    """
+    rows = []
+    for r in request.app.state.db.exit_experiment():
+        rows.append({
+            "arm": r["arm"],
+            "trades": int(r["n"] or 0),
+            "avgReturn": round(float(r["avg_return"]), 4) if r["avg_return"] is not None else None,
+            "winRate": round(float(r["win_rate"]), 4) if r["win_rate"] is not None else None,
+            "totalPnl": round(float(r["total_pnl"]), 2) if r["total_pnl"] is not None else None,
+            "avgStake": round(float(r["avg_stake"]), 2) if r["avg_stake"] is not None else None,
+        })
+    by = {r["arm"]: r for r in rows}
+    follow, hold = by.get("follow"), by.get("hold")
+    diff = None
+    if follow and hold and follow["avgReturn"] is not None and hold["avgReturn"] is not None:
+        diff = round(hold["avgReturn"] - follow["avgReturn"], 4)
+    return {
+        "arms": rows,
+        "holdMinusFollow": diff,
+        "enabled": request.app.state.config_store.risk().exit_experiment,
     }
 
 

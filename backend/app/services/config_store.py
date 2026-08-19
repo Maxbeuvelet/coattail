@@ -30,6 +30,12 @@ _RISK_FIELDS: dict[str, type] = {
     # positions, we pay more than they did on 76% of trades, median +7c on a
     # ~50c contract — the largest single drag on the strategy.
     "max_entry_gap_pct": float,
+    # Randomised A/B on the exit rule. Half the copies follow the trader out,
+    # half are held to resolution. Assignment happens at ENTRY, before the
+    # outcome can influence it — the only construction that answers the
+    # question, since every earlier comparison was contaminated by the trader
+    # choosing which positions to hold.
+    "exit_experiment": bool,
 }
 _AUTO_FIELDS: dict[str, type] = {
     "autopilot_enabled": bool,
@@ -54,6 +60,7 @@ class RiskView:
     engine_paused: bool
     follow_exits: bool
     max_entry_gap_pct: float
+    exit_experiment: bool
 
 
 @dataclass
@@ -122,6 +129,7 @@ class ConfigStore:
             # for a good entry can select their losers. The counterfactual book
             # is what settles whether it helps.
             "max_entry_gap_pct": 0.0,
+            "exit_experiment": False,
             "autopilot_enabled": False,
             "autopilot_rank": "roi",
             "autopilot_count": 5,

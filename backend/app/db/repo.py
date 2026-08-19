@@ -86,6 +86,17 @@ class Database:
             # the difference between the two actually goes.
             ("intl_entry", "REAL"),
             ("intl_exit", "REAL"),
+            # ── randomised exit experiment ──
+            # Assigned at ENTRY, before the outcome is knowable. Every previous
+            # attempt to settle this compared positions the trader CHOSE to hold
+            # against ones they chose to exit — which is selection, not evidence.
+            # Randomising at entry is the only construction that removes it.
+            ("exit_rule", "TEXT"),        # 'follow' | 'hold' | NULL (not in experiment)
+            # US market slug, needed to look up settlement for held positions.
+            ("us2_slug", "TEXT"),
+            # Which side of that US market the copy represents. Needed to settle
+            # a held position: a NO pays out when the market resolves to 0.
+            ("us2_side", "TEXT"),
         ):
             if col not in have:
                 self._exec(f"ALTER TABLE positions ADD COLUMN {col} {decl}")
@@ -429,6 +440,37 @@ class Database:
                  COALESCE(MIN(realized_pnl), 0) AS worst
                FROM positions WHERE status = 'closed'"""
         ) or {}
+
+    def set_exit_rule(self, pid: int, rule: str) -> None:
+        self._exec("UPDATE positions SET exit_rule = ? WHERE id = ?", (rule, pid))
+
+    def set_us2_slug(self, pid: int, slug: str, side: str) -> None:
+        self._exec(
+            "UPDATE positions SET us2_slug = ?, us2_side = ? WHERE id = ?", (slug, side, pid)
+        )
+
+    def held_positions(self) -> list[dict]:
+        """Open positions assigned to the hold-to-settlement arm, which the
+        normal follow-the-trader-out path must leave alone."""
+        return self._rows(
+            """SELECT * FROM positions
+               WHERE status = 'open' AND exit_rule = 'hold' AND us2_slug IS NOT NULL"""
+        )
+
+    def exit_experiment(self) -> list[dict]:
+        """Return per arm. Randomised at entry, so this is a clean comparison —
+        unlike every earlier before/after attempt at the same question."""
+        return self._rows(
+            """SELECT exit_rule AS arm,
+                      COUNT(*) AS n,
+                      AVG(realized_pnl / stake_usd) AS avg_return,
+                      AVG(CASE WHEN realized_pnl > 0 THEN 1.0 ELSE 0.0 END) AS win_rate,
+                      SUM(realized_pnl) AS total_pnl,
+                      AVG(stake_usd) AS avg_stake
+               FROM positions
+               WHERE status = 'closed' AND exit_rule IS NOT NULL AND stake_usd > 0
+               GROUP BY exit_rule"""
+        )
 
     def calibration(self) -> dict:
         """Does the shadow book actually predict what we pay?
