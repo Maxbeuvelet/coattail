@@ -353,6 +353,32 @@ async def us_book(request: Request) -> dict:
     }
 
 
+@router.get("/maker-shadow")
+async def maker_shadow(request: Request) -> dict:
+    """Would resting on the book beat crossing it?
+
+    The median Polymarket US spread is 28% of mid. Crossing it on entry and exit
+    costs more than the strategy's entire per-trade edge, so the only lever left
+    is to rest passively and collect the spread instead of paying it. The catch
+    is that a resting order only fills when someone chooses to hit it — this
+    measures how often that actually happens.
+    """
+    m = request.app.state.db.maker_stats()
+    n = int(m.get("n", 0) or 0)
+    filled = int(m.get("filled", 0) or 0)
+    f = lambda k: (round(float(m[k]), 4) if m.get(k) is not None else None)  # noqa: E731
+    return {
+        "tracked": n,
+        "wouldHaveFilled": filled,
+        "fillRate": round(filled / n, 4) if n else None,
+        "avgSaving": f("avg_saving"),
+        "avgSavingPct": f("avg_saving_pct"),
+        "avgChecks": f("avg_checks"),
+        "returnIfFilled": f("filled_return"),
+        "returnAll": f("all_return"),
+    }
+
+
 @router.get("/match-split")
 async def match_split(request: Request) -> dict:
     """Trades that exist on Polymarket US vs those that don't, compared on

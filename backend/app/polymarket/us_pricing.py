@@ -479,6 +479,14 @@ class UsQuote:
     # could not confidently identify.
     slug: str | None = None
     buy_yes: bool | None = None
+    # Passive ("maker") pricing: what we would pay by RESTING at the touch
+    # instead of crossing it, plus the book needed to tell whether such an order
+    # would ever fill. Median US spread is 28% of mid, so this is the difference
+    # between paying the spread and collecting it.
+    maker_cost: float | None = None   # our cost per contract if we rest
+    maker_wire: float | None = None   # the YES-side price we would rest at
+    bid: float | None = None
+    ask: float | None = None
 
 
 async def _find_event(client: httpx.AsyncClient, event_slug: str, title: str) -> dict | None:
@@ -593,6 +601,10 @@ async def us_quotes(
         market=hit["question"] if hit else None,
         slug=hit["slug"] if hit else None,
         buy_yes=hit["buy_yes"] if hit else None,
+        maker_cost=hit.get("maker_cost") if hit else None,
+        maker_wire=hit.get("maker_wire") if hit else None,
+        bid=hit.get("bid") if hit else None,
+        ask=hit.get("ask") if hit else None,
         fee_coefficient=fee,
     )
 

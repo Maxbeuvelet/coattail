@@ -415,6 +415,9 @@ class FollowEngine:
         if q.strict and q.strict > 0:
             self.db.set_us2_entry(position["id"], round(q.strict, 4), q.market)
             self.db.mark_us2(position["id"], round(q.strict, 4))
+        # Maker shadow: what a passive order would have cost instead of crossing.
+        if q.maker_cost and q.maker_wire:
+            self.db.set_maker_shadow(position["id"], round(q.maker_cost, 4), round(q.maker_wire, 4))
 
     async def _shadow_mark(self, position: dict, trader_pos: dict) -> None:
         """Refresh the US marks for an open shadowed position, alongside the
@@ -432,6 +435,13 @@ class FollowEngine:
             self.db.mark_us(position["id"], round(q.legacy, 4))
         if q.strict and q.strict > 0:
             self.db.mark_us2(position["id"], round(q.strict, 4))
+        # Would a resting order at our price have been hit yet? Buying YES rests
+        # at the bid and fills when the offer drops to it; buying NO is a YES
+        # sale resting at the ask, filled when the bid rises to it.
+        wire = position.get("maker_wire")
+        if wire and q.bid is not None and q.ask is not None:
+            hit = (q.ask <= wire) if position.get("live_side") != "NO" else (q.bid >= wire)
+            self.db.maker_check(position["id"], bool(hit))
 
     async def _shadow_close(self, pos: dict) -> None:
         """Close both US shadows at their LAST US mark — captured on the same

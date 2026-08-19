@@ -70,6 +70,15 @@ class Database:
             # Resting maker orders: the position exists before it is filled.
             ("order_id", "TEXT"),
             ("order_placed_at", "TEXT"),
+            # ── maker shadow ──
+            # What a PASSIVE order would have cost, and whether it would ever
+            # have filled. The median US spread is 28% of mid, crossed twice,
+            # which is larger than the strategy's whole edge — so whether a
+            # resting order fills is the question that decides everything.
+            ("maker_cost", "REAL"),      # our cost/contract if we rested
+            ("maker_wire", "REAL"),      # the YES-side price we would rest at
+            ("maker_filled", "INTEGER DEFAULT 0"),
+            ("maker_checks", "INTEGER DEFAULT 0"),
         ):
             if col not in have:
                 self._exec(f"ALTER TABLE positions ADD COLUMN {col} {decl}")
@@ -411,6 +420,39 @@ class Database:
                  COALESCE(MAX(realized_pnl), 0) AS best,
                  COALESCE(MIN(realized_pnl), 0) AS worst
                FROM positions WHERE status = 'closed'"""
+        ) or {}
+
+    def set_maker_shadow(self, pid: int, cost: float, wire: float) -> None:
+        self._exec(
+            "UPDATE positions SET maker_cost = ?, maker_wire = ? WHERE id = ?",
+            (cost, wire, pid),
+        )
+
+    def maker_check(self, pid: int, filled: bool) -> None:
+        """One observation of whether a resting order would have been hit."""
+        self._exec(
+            """UPDATE positions
+               SET maker_checks = COALESCE(maker_checks, 0) + 1,
+                   maker_filled = CASE WHEN ? THEN 1 ELSE COALESCE(maker_filled, 0) END
+               WHERE id = ?""",
+            (1 if filled else 0, pid),
+        )
+
+    def maker_stats(self) -> dict:
+        """Would resting instead of crossing have been better, and how often
+        would it actually have filled?"""
+        return self._row(
+            """SELECT
+                 COUNT(*) AS n,
+                 SUM(maker_filled) AS filled,
+                 AVG(entry_price - maker_cost) AS avg_saving,
+                 AVG(CASE WHEN maker_cost > 0
+                          THEN (entry_price - maker_cost) / entry_price END) AS avg_saving_pct,
+                 AVG(maker_checks) AS avg_checks,
+                 AVG(CASE WHEN maker_filled = 1 THEN realized_pnl / stake_usd END) AS filled_return,
+                 AVG(realized_pnl / stake_usd) AS all_return
+               FROM positions
+               WHERE maker_cost IS NOT NULL AND entry_price > 0"""
         ) or {}
 
     def match_split(self) -> list[dict]:
