@@ -353,6 +353,32 @@ async def us_book(request: Request) -> dict:
     }
 
 
+@router.get("/attribution")
+async def attribution(request: Request) -> dict:
+    """Where does the international edge go before it reaches us?
+
+    The paper book fills at international prices and earns ~+23%/trade on the
+    same signals we lose money on. This decomposes the difference per trade into
+    entry pricing, exit pricing and fees, so the answer is measured rather than
+    argued about.
+    """
+    m = request.app.state.db.attribution()
+    n = int(m.get("n", 0) or 0)
+    f = lambda k: (round(float(m[k]), 4) if m.get(k) is not None else None)  # noqa: E731
+    intl, ours = f("intl_return"), f("our_return")
+    return {
+        "trades": n,
+        "intlReturn": intl,
+        "ourReturn": ours,
+        "totalGap": round(intl - ours, 4) if (intl is not None and ours is not None) else None,
+        "entryDrag": f("entry_drag"),
+        "exitDrag": f("exit_drag"),
+        "feeDrag": f("fee_drag"),
+        "avgIntlEntry": f("avg_intl_entry"),
+        "avgOurEntry": f("avg_our_entry"),
+    }
+
+
 @router.get("/maker-shadow")
 async def maker_shadow(request: Request) -> dict:
     """Would resting on the book beat crossing it?

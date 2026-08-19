@@ -339,6 +339,7 @@ class FollowEngine:
             # Settlement is quoted on the YES side. A NO position pays out when
             # the market settles to 0, so its payout is the complement.
             yes = 1.0 if float(val) >= 0.5 else 0.0
+            self.db.set_intl_exit(pos["id"], float(pos.get("cur_price") or 0))
             price = yes if pos.get("live_side") != "NO" else 1.0 - yes
             realized = round(pos["shares"] * price - pos["stake_usd"], 2)
             self.db.close_position(pos["id"], price, realized)
@@ -571,6 +572,7 @@ class FollowEngine:
             for pos in (self.db.open_positions() if r.follow_exits else []):
                 if pos["wallet"] == wallet and pos["asset"] not in current_assets:
                     try:
+                        self.db.set_intl_exit(pos["id"], float(pos["cur_price"]))
                         self.executor.close_copy(self.db, pos, pos["cur_price"])
                     except DryRunOrder as dry:
                         log.warning("DRY RUN close %s: %s", pos["title"][:40], dry)

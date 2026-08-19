@@ -71,6 +71,9 @@ class PaperExecutor(Executor):
             # What the trader we copy actually paid. We fill at their CURRENT
             # price, which is usually worse; storing both lets us measure it.
             "whale_entry": _num_or_none(trader_pos.get("avgPrice")),
+            # The international price at this instant — what the paper book
+            # fills at, and the baseline every attribution is measured against.
+            "intl_entry": _num_or_none(trader_pos.get("curPrice")),
         }
         pid = db.insert_position(position)
         position["id"] = pid
@@ -354,6 +357,7 @@ class LiveExecutor(Executor):
             "shares": round(shares, 4),
             "stake_usd": round(shares * cost_per_contract, 2),
             "whale_entry": _num_or_none(trader_pos.get("avgPrice")),
+            "intl_entry": _num_or_none(trader_pos.get("curPrice")),
         }
         pid = db.insert_position(position)
         position["id"] = pid
@@ -444,6 +448,7 @@ class LiveExecutor(Executor):
             "entry_price": round(our_cost, 4), "shares": float(quantity),
             "stake_usd": round(our_cost * quantity, 2),
             "whale_entry": _num_or_none(trader_pos.get("avgPrice")),
+            "intl_entry": _num_or_none(trader_pos.get("curPrice")),
             "order_id": order_id,
             "order_placed_at": datetime.now(timezone.utc).isoformat(),
         }

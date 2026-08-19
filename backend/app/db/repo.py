@@ -79,6 +79,13 @@ class Database:
             ("maker_wire", "REAL"),      # the YES-side price we would rest at
             ("maker_filled", "INTEGER DEFAULT 0"),
             ("maker_checks", "INTEGER DEFAULT 0"),
+            # ── attribution ──
+            # The INTERNATIONAL price at the moment we copied, and at the moment
+            # we exited. The paper bot books its P&L at these prices; the live
+            # bot books at US prices. Storing both is the only way to say where
+            # the difference between the two actually goes.
+            ("intl_entry", "REAL"),
+            ("intl_exit", "REAL"),
         ):
             if col not in have:
                 self._exec(f"ALTER TABLE positions ADD COLUMN {col} {decl}")
@@ -166,13 +173,14 @@ class Database:
             """INSERT INTO positions
                (wallet, name, asset, condition_id, title, outcome,
                 entry_price, shares, stake_usd, cur_price, status, opened_at,
-                event_slug, whale_entry, order_id, order_placed_at)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                event_slug, whale_entry, order_id, order_placed_at, intl_entry)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (
                 p["wallet"], p["name"], p["asset"], p.get("condition_id"), p["title"],
                 p["outcome"], p["entry_price"], p["shares"], p["stake_usd"],
                 p["entry_price"], status, _now(), p.get("event_slug"),
                 p.get("whale_entry"), p.get("order_id"), p.get("order_placed_at"),
+                p.get("intl_entry"),
             ),
         )
         return int(cur.lastrowid)
@@ -420,6 +428,37 @@ class Database:
                  COALESCE(MAX(realized_pnl), 0) AS best,
                  COALESCE(MIN(realized_pnl), 0) AS worst
                FROM positions WHERE status = 'closed'"""
+        ) or {}
+
+    def set_intl_exit(self, pid: int, price: float) -> None:
+        """The international price when we exited — what the paper book would
+        have realised on the same trade."""
+        self._exec("UPDATE positions SET intl_exit = ? WHERE id = ?", (price, pid))
+
+    def attribution(self) -> dict:
+        """Decompose the gap between the international result and ours.
+
+        For each closed trade with both prices recorded:
+          intl return  = (intl_exit - intl_entry) / intl_entry     what paper books
+          our return   = (exit_price - entry_price) / entry_price  what we book
+          entry drag   = (entry_price - intl_entry) / intl_entry   paying up to enter
+          exit drag    = (intl_exit - exit_price) / intl_exit      getting less to exit
+          fee drag     = fees / stake
+        """
+        return self._row(
+            """SELECT
+                 COUNT(*) AS n,
+                 AVG((intl_exit - intl_entry) / intl_entry)            AS intl_return,
+                 AVG((exit_price - entry_price) / entry_price)         AS our_return,
+                 AVG((entry_price - intl_entry) / intl_entry)          AS entry_drag,
+                 AVG((intl_exit - exit_price) / intl_exit)             AS exit_drag,
+                 AVG((COALESCE(live_fees,0) + COALESCE(live_exit_fees,0)) / stake_usd) AS fee_drag,
+                 AVG(intl_entry) AS avg_intl_entry,
+                 AVG(entry_price) AS avg_our_entry
+               FROM positions
+               WHERE status = 'closed'
+                 AND intl_entry > 0 AND intl_exit > 0
+                 AND entry_price > 0 AND exit_price > 0 AND stake_usd > 0"""
         ) or {}
 
     def set_maker_shadow(self, pid: int, cost: float, wire: float) -> None:
