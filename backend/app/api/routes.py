@@ -353,6 +353,41 @@ async def us_book(request: Request) -> dict:
     }
 
 
+@router.get("/calibration")
+async def calibration(request: Request) -> dict:
+    """Is the shadow book a valid simulator, or fiction?
+
+    Compares the price the shadow book predicted against the fill actually
+    received, trade by trade. Every plan that leans on shadow data depends on
+    this reconciling, and until now nobody had checked.
+    """
+    db = request.app.state.db
+    m = db.calibration()
+    n = int(m.get("n", 0) or 0)
+    f = lambda k: (round(float(m[k]), 4) if m.get(k) is not None else None)  # noqa: E731
+    rows = [{
+        "title": r["title"], "outcome": r["outcome"], "side": r["live_side"],
+        "slug": r["live_slug"],
+        "predicted": round(float(r["live_predicted"]), 4),
+        "actual": round(float(r["live_fill"]), 4),
+        "error": round(float(r["err"]), 4),
+        "stake": r["stake_usd"], "realized": r["realized_pnl"], "status": r["status"],
+    } for r in db.calibration_rows(40)]
+    return {
+        "trades": n,
+        "meanError": f("mean_err"),
+        "meanAbsError": f("mean_abs_err"),
+        "meanPctError": f("mean_pct_err"),
+        "worstError": f("worst_err"),
+        "paidMore": int(m.get("paid_more", 0) or 0),
+        "paidLess": int(m.get("paid_less", 0) or 0),
+        "exact": int(m.get("exact", 0) or 0),
+        "avgPredicted": f("avg_predicted"),
+        "avgFill": f("avg_fill"),
+        "worstTrades": rows,
+    }
+
+
 @router.get("/attribution")
 async def attribution(request: Request) -> dict:
     """Where does the international edge go before it reaches us?

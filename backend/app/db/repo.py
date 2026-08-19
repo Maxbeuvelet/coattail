@@ -430,6 +430,49 @@ class Database:
                FROM positions WHERE status = 'closed'"""
         ) or {}
 
+    def calibration(self) -> dict:
+        """Does the shadow book actually predict what we pay?
+
+        Every shadow-based plan — exit re-scoring, trader scanning, filter
+        design — assumes this simulator reproduces reality. Nobody has checked.
+        If predicted and actual diverge, every conclusion drawn from the shadow
+        book is fiction, and that is worth knowing before another afternoon is
+        spent on it.
+
+        Compares the price the shadow book predicted against the fill we
+        actually got, on the same trade.
+        """
+        return self._row(
+            """SELECT
+                 COUNT(*) AS n,
+                 AVG(live_fill - live_predicted)              AS mean_err,
+                 AVG(ABS(live_fill - live_predicted))         AS mean_abs_err,
+                 AVG(CASE WHEN live_predicted > 0
+                          THEN (live_fill - live_predicted) / live_predicted END) AS mean_pct_err,
+                 SUM(CASE WHEN live_fill > live_predicted + 0.001 THEN 1 ELSE 0 END) AS paid_more,
+                 SUM(CASE WHEN live_fill < live_predicted - 0.001 THEN 1 ELSE 0 END) AS paid_less,
+                 SUM(CASE WHEN ABS(live_fill - live_predicted) <= 0.001 THEN 1 ELSE 0 END) AS exact,
+                 MAX(ABS(live_fill - live_predicted))         AS worst_err,
+                 AVG(live_predicted) AS avg_predicted,
+                 AVG(live_fill)      AS avg_fill
+               FROM positions
+               WHERE live_predicted IS NOT NULL AND live_predicted > 0
+                 AND live_fill IS NOT NULL AND live_fill > 0"""
+        ) or {}
+
+    def calibration_rows(self, limit: int = 40) -> list[dict]:
+        """The individual comparisons, worst error first — so a bad average can
+        be traced to specific trades rather than argued about."""
+        return self._rows(
+            """SELECT title, outcome, live_side, live_slug, live_predicted, live_fill,
+                      (live_fill - live_predicted) AS err, stake_usd, realized_pnl, status
+               FROM positions
+               WHERE live_predicted IS NOT NULL AND live_predicted > 0
+                 AND live_fill IS NOT NULL AND live_fill > 0
+               ORDER BY ABS(live_fill - live_predicted) DESC LIMIT ?""",
+            (limit,),
+        )
+
     def set_intl_exit(self, pid: int, price: float) -> None:
         """The international price when we exited — what the paper book would
         have realised on the same trade."""
