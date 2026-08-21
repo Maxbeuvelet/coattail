@@ -556,8 +556,12 @@ class FollowEngine:
         block_entries = r.engine_paused or self._kill_active(r)
         # Recomputed after the pass for the summary, so the dashboard reflects
         # the state the closes in this tick just produced.
-        # Fast mode only copies soon-resolving positions (quick turnover).
-        fast_mode = ac.autopilot_enabled and ac.autopilot_rank == "churn"
+        # Only copy soon-resolving positions. This used to be tied to churn
+        # ranking, which meant switching to `roi` silently turned it off — and a
+        # small account then parks its whole balance in months-out positions and
+        # produces no closed trades to learn from. Turnover is a separate
+        # concern from how the follow set is picked, so gate it separately.
+        fast_mode = ac.autopilot_enabled
         opened = closed = marked = errors = 0
 
         # Hold-arm positions settle on both bots — the paper book has no other
@@ -672,7 +676,7 @@ class FollowEngine:
                 if reason is None and block_entries:
                     reason = "engine paused" if r.engine_paused else "daily-loss kill switch active"
                 if reason is None and fast_mode and not _is_near_term(p.get("endDate")):
-                    reason = f"resolves >{int(_FAST_MAX_DAYS)}d out (fast mode)"
+                    reason = f"resolves >{int(_FAST_MAX_DAYS)}d out"
                 # Don't chase: the trader's edge was at THEIR price, and by the
                 # time their position is public the market has usually moved.
                 if reason is None and r.max_entry_gap_pct > 0:
